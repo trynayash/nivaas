@@ -17,8 +17,13 @@ const num = (min: number, max: number, label: string) =>
     (v) => (v === "" || v === null || v === undefined ? NaN : Number(v)),
     z.number({ message: `Enter ${label}.` }).refine((n) => Number.isFinite(n), `Enter ${label}.`).pipe(z.number().min(min, `${label} looks too small.`).max(max, `${label} looks too large.`))
   );
+// Blank entries (empty lines, trailing commas) are dropped before the item limit is checked.
 const lines = (maxItems: number, maxLen: number) =>
-  z.array(text(maxLen)).max(maxItems).transform((a) => a.map((s) => s.trim()).filter(Boolean));
+  z
+    .array(z.string().max(2000))
+    .max(200)
+    .transform((a) => a.map((s) => s.trim()).filter(Boolean))
+    .pipe(z.array(text(maxLen)).max(maxItems, `Up to ${maxItems} items.`));
 
 const imageUrl = z
   .string()
@@ -129,11 +134,37 @@ export const listingInputSchema = baseSchema.superRefine((v, ctx) =>
 export type ListingInput = z.input<typeof listingInputSchema>;
 export type ListingData = z.output<typeof listingInputSchema>;
 
+const HOUSE_TYPES = ["Villa", "Independent House", "Row House"];
+
+/**
+ * Drop values for fields the form doesn't show for this kind of listing, so a stale or half-typed
+ * value left behind after switching type (e.g. Apartment → Plot) can neither block saving nor be stored.
+ */
+export function withoutHiddenFields(input: unknown): unknown {
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input;
+  const v = { ...(input as Record<string, unknown>) };
+  if (v.type === "Plot") {
+    Object.assign(v, { bhk: 0, bathrooms: 0, balconies: 0, parkingCovered: 0, parkingOpen: 0, furnishing: "Unfurnished", flooring: "", powerBackup: "" });
+    for (const k of ["carpetArea", "builtUpArea", "superBuiltUpArea", "floor", "totalFloors", "ageYears"]) v[k] = undefined;
+  } else if (!HOUSE_TYPES.includes(String(v.type))) {
+    v.plotArea = undefined;
+  }
+  if (v.status !== "Ready to Move") v.ageYears = undefined;
+  // A nearby-place row left completely empty is ignored rather than reported as an error.
+  if (Array.isArray(v.nearby))
+    v.nearby = v.nearby.filter((r) => !r || typeof r !== "object" || Object.values(r as object).some((x) => String(x ?? "").trim() !== ""));
+  if (v.reraApplicable === true) v.reraNote = "";
+  else if (v.reraApplicable === false) v.reraNumber = "";
+  return v;
+}
+
 /** Validate form values and return every field error at once (base rules + cross-field rules). */
-export function validateListing(input: ListingInput): { ok: true; data: ListingData } | { ok: false; errors: Record<string, string> } {
+export function validateListing(raw: unknown): { ok: true; data: ListingData } | { ok: false; errors: Record<string, string> } {
+  const input = withoutHiddenFields(raw);
   const r = listingInputSchema.safeParse(input);
   if (r.success) return { ok: true, data: r.data };
   const errors = fieldErrors(r.error);
+  if (!input || typeof input !== "object") return { ok: false, errors: { _: "Nothing was submitted." } };
   crossCheck(input as unknown as Cross, (path, message) => {
     if (!errors[path]) errors[path] = message;
   });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { getCity } from "@/lib/locations";
 import { Facets, Filters, SORTS, SortKey, filtersToParams } from "@/lib/search";
 import { CRORE, LAKH, cx, formatPrice } from "@/lib/format";
@@ -9,6 +9,11 @@ import { FURNISHINGS, PROPERTY_TYPES } from "@/lib/types";
 
 const PRICE_STEPS = [20, 30, 40, 50, 60, 75, 90].map((l) => l * LAKH).concat([1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10].map((c) => c * CRORE));
 const AREA_STEPS = [500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000, 4000, 5000];
+const BHK_CHIPS: { label: string; values: number[] }[] = [
+  ...[1, 2, 3, 4, 5].map((b) => ({ label: `${b} BHK`, values: [b] })),
+  { label: "6+ BHK", values: [6, 7, 8, 9, 10] },
+  { label: "Plot", values: [0] },
+];
 const QUICK_BUDGETS: { label: string; min?: number; max?: number }[] = [
   { label: "Under ₹50 L", max: 50 * LAKH },
   { label: "Under ₹1 Cr", max: CRORE },
@@ -20,17 +25,32 @@ const TOP_AMENITIES = ["Swimming Pool", "Gymnasium", "Clubhouse", "Children's Pl
 function useApply(filters: Filters) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  // Latest intended filters. Each click builds on this rather than on the last server render,
+  // so quick successive clicks (2 BHK, then 3 BHK) both stick. Re-synced when the page re-renders.
+  const latest = useRef(filters);
+  useEffect(() => {
+    latest.current = filters;
+  }, [filters]);
   const apply = (patch: Partial<Filters>) => {
-    const next: Filters = { ...filters, ...patch, page: 1 };
+    // Changing a filter by hand drops the typed query, so the search box never contradicts the results.
+    const next: Filters = { ...latest.current, ...patch, q: undefined, page: 1 };
+    latest.current = next;
     start(() => router.push(`/search?${filtersToParams(next).toString()}`, { scroll: false }));
   };
-  return { apply, pending };
+  return { apply, pending, latest };
+}
+
+/** Options for a price select: the presets plus the active value if it isn't one of them. */
+function priceOptions(current: number | undefined, keep: (p: number) => boolean) {
+  const opts = PRICE_STEPS.filter(keep);
+  if (current && !opts.includes(current)) opts.push(current);
+  return opts.sort((a, b) => a - b);
 }
 
 const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter((x) => x !== v) : [...list, v]);
 
 export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Facets }) {
-  const { apply, pending } = useApply(filters);
+  const { apply, pending, latest } = useApply(filters);
   const [open, setOpen] = useState(false);
   const city = getCity(filters.city);
   const activeCount =
@@ -100,7 +120,7 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
                         {l.areas.map((a) => (
                           <li key={a.slug}>
                             <label className={cx("check check-sm", a.count === 0 && !filters.areas.includes(a.slug) && "is-empty")}>
-                              <input type="checkbox" checked={filters.areas.includes(a.slug)} onChange={() => apply({ areas: toggle(filters.areas, a.slug) })} />
+                              <input type="checkbox" checked={filters.areas.includes(a.slug)} onChange={() => apply({ areas: toggle(latest.current.areas, a.slug) })} />
                               <span>{a.name}</span>
                               <em>{a.count}</em>
                             </label>
@@ -120,13 +140,24 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
         <fieldset className="fgroup">
           <legend>Configuration</legend>
           <div className="chip-row">
-            {[1, 2, 3, 4, 5, 0].map((b) => {
-              const n = facets.bhk[String(b)] ?? 0;
-              const on = filters.bhk.includes(b);
-              if (b === 0 && !n && !on) return null;
+            {BHK_CHIPS.map(({ label, values }) => {
+              const n = values.reduce((sum, b) => sum + (facets.bhk[String(b)] ?? 0), 0);
+              const on = values.every((b) => filters.bhk.includes(b));
+              if (values[0] === 0 && !n && !on) return null;
               return (
-                <button key={b} type="button" className={cx("chip chip-sm", on && "is-on")} aria-pressed={on} onClick={() => apply({ bhk: toggle(filters.bhk, b).sort() })} disabled={!n && !on}>
-                  {b === 0 ? "Plot" : `${b} BHK`}
+                <button
+                  key={label}
+                  type="button"
+                  className={cx("chip chip-sm", on && "is-on")}
+                  aria-pressed={on}
+                  onClick={() => {
+                    const cur = latest.current.bhk;
+                    const next = on ? cur.filter((b) => !values.includes(b)) : [...new Set([...cur, ...values])];
+                    apply({ bhk: next.sort((a, b) => a - b) });
+                  }}
+                  disabled={!n && !on}
+                >
+                  {label}
                   <small>{n}</small>
                 </button>
               );
@@ -140,7 +171,7 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
           <div className="range-row">
             <select aria-label="Minimum price" value={filters.minPrice ?? ""} onChange={(e) => apply({ minPrice: Number(e.target.value) || undefined })}>
               <option value="">No min</option>
-              {PRICE_STEPS.filter((p) => !filters.maxPrice || p < filters.maxPrice).map((p) => (
+              {priceOptions(filters.minPrice, (p) => !filters.maxPrice || p < filters.maxPrice).map((p) => (
                 <option key={p} value={p}>
                   {formatPrice(p)}
                 </option>
@@ -149,7 +180,7 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
             <span>to</span>
             <select aria-label="Maximum price" value={filters.maxPrice ?? ""} onChange={(e) => apply({ maxPrice: Number(e.target.value) || undefined })}>
               <option value="">No max</option>
-              {PRICE_STEPS.filter((p) => !filters.minPrice || p > filters.minPrice).map((p) => (
+              {priceOptions(filters.maxPrice, (p) => !filters.minPrice || p > filters.minPrice).map((p) => (
                 <option key={p} value={p}>
                   {formatPrice(p)}
                 </option>
@@ -177,7 +208,7 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
             if (!n && !on) return null;
             return (
               <label key={t} className="check">
-                <input type="checkbox" checked={on} onChange={() => apply({ types: toggle(filters.types, t) })} />
+                <input type="checkbox" checked={on} onChange={() => apply({ types: toggle(latest.current.types, t) })} />
                 <span>{t}</span>
                 <em>{n}</em>
               </label>
@@ -194,7 +225,7 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
               ["Ready to Move", "Ready"],
               ["Under Construction", "Under construction"],
             ] as const).map(([v, label]) => (
-              <button key={v} type="button" className={cx((filters.status ?? "") === v && "is-on")} onClick={() => apply({ status: (v || undefined) as Filters["status"] })}>
+              <button key={v} type="button" className={cx((filters.status ?? "") === v && "is-on")} aria-pressed={(filters.status ?? "") === v} onClick={() => apply({ status: (v || undefined) as Filters["status"] })}>
                 {label}
                 {v && <small>{facets.status[v] ?? 0}</small>}
               </button>
@@ -207,7 +238,7 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
           <legend>Furnishing</legend>
           {FURNISHINGS.map((f) => (
             <label key={f} className="check">
-              <input type="checkbox" checked={filters.furnishing.includes(f)} onChange={() => apply({ furnishing: toggle(filters.furnishing, f) })} />
+              <input type="checkbox" checked={filters.furnishing.includes(f)} onChange={() => apply({ furnishing: toggle(latest.current.furnishing, f) })} />
               <span>{f}</span>
               <em>{facets.furnishing[f] ?? 0}</em>
             </label>
@@ -243,7 +274,7 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
           <legend>Amenities</legend>
           {TOP_AMENITIES.map((a) => (
             <label key={a} className="check">
-              <input type="checkbox" checked={filters.amenities.includes(a)} onChange={() => apply({ amenities: toggle(filters.amenities, a) })} />
+              <input type="checkbox" checked={filters.amenities.includes(a)} onChange={() => apply({ amenities: toggle(latest.current.amenities, a) })} />
               <span>{a}</span>
             </label>
           ))}

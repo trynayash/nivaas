@@ -12,11 +12,21 @@ export interface ListingStore {
   list(opts?: { includeDrafts?: boolean }): Promise<Property[]>;
   get(id: string): Promise<Property | undefined>;
   getBySlug(slug: string): Promise<Property | undefined>;
-  /** Insert or replace. Fails with code "SLUG_TAKEN" if another listing already uses the slug. */
-  save(p: Property): Promise<Property>;
+  /**
+   * Insert or replace. Fails with SlugTakenError if another listing uses the slug, and with
+   * StaleListingError if `expectedRev` is given and the stored listing has changed since.
+   */
+  save(p: Property, expectedRev?: number): Promise<Property>;
   remove(id: string): Promise<boolean>;
   removeSamples(): Promise<number>;
   counts(): Promise<{ total: number; published: number; samples: number }>;
+}
+
+export class StaleListingError extends Error {
+  code = "STALE";
+  constructor() {
+    super("This listing was changed somewhere else (another tab or the publish switch). Reload the page to get the latest version, then make your change again.");
+  }
 }
 
 export class SlugTakenError extends Error {
@@ -74,15 +84,16 @@ const run = <T,>(fn: () => Promise<T>) =>
     return fn();
   });
 
-type Row = { data: Property; published: boolean; is_sample: boolean; created_at: Date; updated_at: Date };
+type Row = { data: Property; published: boolean; is_sample: boolean; created_at: Date; updated_at: Date; rev: number };
 const fromRow = (r: Row): Property => ({
   ...r.data,
   published: r.published,
   isSample: r.is_sample,
   createdAt: iso(r.created_at)!,
   updatedAt: iso(r.updated_at)!,
+  rev: r.rev,
 });
-const COLS = `data, published, is_sample, created_at, updated_at`;
+const COLS = `data, published, is_sample, created_at, updated_at, rev`;
 
 const postgresStore: ListingStore = {
   name: "postgres",
@@ -107,20 +118,23 @@ const postgresStore: ListingStore = {
       return rows[0] ? fromRow(rows[0]) : undefined;
     }),
 
-  save: (p) =>
+  save: (p, expectedRev) =>
     run(async () => {
-      const { createdAt, updatedAt, ...data } = p;
+      const { createdAt, updatedAt, rev, ...data } = p;
       void updatedAt;
+      void rev;
       try {
         const { rows } = await pool().query<Row>(
           `insert into properties (id, slug, data, published, is_sample, created_at, updated_at)
            values ($1, $2, $3::jsonb, $4, $5, coalesce($6::timestamptz, now()), now())
            on conflict (id) do update
              set slug = excluded.slug, data = excluded.data, published = excluded.published,
-                 is_sample = excluded.is_sample, updated_at = now()
+                 is_sample = excluded.is_sample, updated_at = now(), rev = properties.rev + 1
+             where $7::int is null or properties.rev = $7::int
            returning ${COLS}`,
-          [p.id, p.slug, JSON.stringify(data), p.published, p.isSample, createdAt ?? null]
+          [p.id, p.slug, JSON.stringify(data), p.published, p.isSample, createdAt ?? null, expectedRev ?? null]
         );
+        if (!rows[0]) throw new StaleListingError();
         return fromRow(rows[0]);
       } catch (err) {
         if ((err as { code?: string; constraint?: string }).code === "23505") throw new SlugTakenError(p.slug);
@@ -181,13 +195,14 @@ const jsonStore: ListingStore = {
   list: async (opts = {}) => (await loadFile()).filter((p) => opts.includeDrafts || p.published).sort(byNewest),
   get: async (id) => (await loadFile()).find((p) => p.id === id),
   getBySlug: async (slug) => (await loadFile()).find((p) => p.slug === slug),
-  save: (p) =>
+  save: (p, expectedRev) =>
     serial(async () => {
       const list = await loadFile();
       if (list.some((x) => x.slug === p.slug && x.id !== p.id)) throw new SlugTakenError(p.slug);
       const now = new Date().toISOString();
       const i = list.findIndex((x) => x.id === p.id);
-      const saved = { ...p, createdAt: i >= 0 ? list[i].createdAt ?? p.createdAt ?? now : p.createdAt ?? now, updatedAt: now };
+      if (i >= 0 && expectedRev !== undefined && (list[i].rev ?? 0) !== expectedRev) throw new StaleListingError();
+      const saved = { ...p, createdAt: i >= 0 ? list[i].createdAt ?? p.createdAt ?? now : p.createdAt ?? now, updatedAt: now, rev: i >= 0 ? (list[i].rev ?? 0) + 1 : 0 };
       if (i >= 0) list[i] = saved;
       else list.push(saved);
       await saveFile(list);

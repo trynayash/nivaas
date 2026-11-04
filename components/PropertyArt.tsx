@@ -44,29 +44,33 @@ export function PropertyArt({
   const line = { stroke: INK, strokeWidth: 1.3, fill: "none", strokeLinecap: "square" as const };
   const face = { ...line, fill: FACADE };
 
-  /** Grid of windows inside a block, one row per floor. */
+  /**
+   * Grid of windows inside a block, one row per floor. Drawn with an SVG <pattern> (one element)
+   * instead of a rect per window, which keeps card-heavy pages small. A few panes are tinted.
+   */
   const windows = (x: number, y: number, w: number, floors: number, floorH: number, cols: number) => {
-    const out: ReactNode[] = [];
     const gw = w / cols;
-    for (let f = 0; f < floors; f++) {
-      const fy = y + f * floorH;
-      if (f > 0) out.push(<line key={`fl${x}-${f}`} x1={x} y1={fy} x2={x + w} y2={fy} stroke={INK} strokeWidth={0.6} opacity={0.5} />);
-      for (let c = 0; c < cols; c++) {
-        out.push(
-          <rect
-            key={`w${x}-${f}-${c}`}
-            x={x + c * gw + gw * 0.2}
-            y={fy + floorH * 0.28}
-            width={gw * 0.6}
-            height={floorH * 0.46}
-            {...line}
-            strokeWidth={0.9}
-            fill={r() < 0.35 ? GLASS : "none"}
-          />
-        );
-      }
+    const pid = `win-${id}-${x}`;
+    const tinted: ReactNode[] = [];
+    for (let k = 0; k < Math.round(floors * cols * 0.3); k++) {
+      const f = Math.floor(r() * floors);
+      const c = Math.floor(r() * cols);
+      tinted.push(
+        <rect key={k} x={x + c * gw + gw * 0.2} y={y + f * floorH + floorH * 0.28} width={gw * 0.6} height={floorH * 0.46} fill={GLASS} stroke={INK} strokeWidth={0.9} />
+      );
     }
-    return out;
+    return (
+      <g key={pid}>
+        <defs>
+          <pattern id={pid} x={x} y={y} width={gw} height={floorH} patternUnits="userSpaceOnUse">
+            <line x1={0} y1={0} x2={gw} y2={0} stroke={INK} strokeWidth={0.6} opacity={0.5} />
+            <rect x={gw * 0.2} y={floorH * 0.28} width={gw * 0.6} height={floorH * 0.46} fill="none" stroke={INK} strokeWidth={0.9} />
+          </pattern>
+        </defs>
+        <rect x={x} y={y} width={w} height={floors * floorH} fill={`url(#${pid})`} />
+        {tinted}
+      </g>
+    );
   };
 
   const tree = (x: number, s = 1) => (

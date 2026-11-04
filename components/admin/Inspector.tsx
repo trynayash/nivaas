@@ -2,7 +2,7 @@
 
 import { FONT_OPTIONS, Page, SECTION_DEFS, Section, SectionStyle, TAGS, Tag, TextStyle, Theme, defaultSizeFor } from "@/lib/cms/schema";
 import { cx } from "@/lib/format";
-import { ColorInput, Field, Group, Segmented, Slider, Switch, ToggleButton } from "./controls";
+import { ColorInput, Field, Group, Input, Segmented, Select, Slider, Switch, TextArea, ToggleButton } from "./controls";
 
 export interface InspectorApi {
   page: Page;
@@ -85,15 +85,15 @@ export function TextInspector({ api, section, path }: { api: InspectorApi; secti
 
       <Group title="Content">
         {multiline ? (
-          <textarea
-            className="st-input"
+          <TextArea
+            aria-label={`${info.label} — text`}
             rows={4}
             value={info.text}
             onChange={(e) => api.updateSection(section.id, (s) => writeText(s, path, e.target.value), `${section.id}:${path}:text`)}
           />
         ) : (
-          <input
-            className="st-input"
+          <Input
+            aria-label={`${info.label} — text`}
             value={info.text}
             onChange={(e) => api.updateSection(section.id, (s) => writeText(s, path, e.target.value), `${section.id}:${path}:text`)}
           />
@@ -129,14 +129,14 @@ export function TextInspector({ api, section, path }: { api: InspectorApi; secti
           <Slider value={st.fontSize} placeholder={defaultSizeFor(st.tag)} min={10} max={120} unit="px" onChange={(v) => set({ fontSize: v }, "size")} onReset={() => set({ fontSize: null })} />
         </Field>
         <Field label="Weight">
-          <select className="st-input" value={st.weight ?? ""} onChange={(e) => set({ weight: e.target.value ? Number(e.target.value) : null })}>
+          <Select value={st.weight ?? ""} onChange={(e) => set({ weight: e.target.value ? Number(e.target.value) : null })}>
             <option value="">Auto</option>
             {[300, 400, 500, 600, 700, 800].map((w) => (
               <option key={w} value={w}>
                 {w} {w === 400 ? "· Regular" : w === 700 ? "· Bold" : w === 300 ? "· Light" : w === 600 ? "· Semibold" : ""}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Typeface">
           <Segmented<"auto" | "display" | "body">
@@ -221,9 +221,9 @@ export function SectionInspector({ api, section }: { api: InspectorApi; section:
             <Field key={r.key} label={r.label}>
               <div className="st-with-action">
                 {r.multiline ? (
-                  <textarea className="st-input" rows={3} value={section.text[r.key]?.text ?? ""} onChange={(e) => up((s) => writeText(s, `t:${r.key}`, e.target.value), `t:${r.key}`)} />
+                  <TextArea rows={3} value={section.text[r.key]?.text ?? ""} onChange={(e) => up((s) => writeText(s, `t:${r.key}`, e.target.value), `t:${r.key}`)} />
                 ) : (
-                  <input className="st-input" value={section.text[r.key]?.text ?? ""} onChange={(e) => up((s) => writeText(s, `t:${r.key}`, e.target.value), `t:${r.key}`)} />
+                  <Input value={section.text[r.key]?.text ?? ""} onChange={(e) => up((s) => writeText(s, `t:${r.key}`, e.target.value), `t:${r.key}`)} />
                 )}
                 <button type="button" className="st-icon-btn" title={`Typography for ${r.label}`} onClick={() => api.select(section.id, `t:${r.key}`)}>
                   Aa
@@ -274,17 +274,17 @@ export function SectionInspector({ api, section }: { api: InspectorApi; section:
                 {def.itemFields!.map((f) => (
                   <Field key={f.key} label={f.label}>
                     {f.options ? (
-                      <select className="st-input" value={item[f.key] ?? ""} onChange={(e) => up((s) => (s.items![i][f.key] = e.target.value))}>
+                      <Select value={item[f.key] ?? ""} onChange={(e) => up((s) => (s.items![i][f.key] = e.target.value))}>
                         {f.options.map((o) => (
                           <option key={o.value} value={o.value}>
                             {o.label}
                           </option>
                         ))}
-                      </select>
+                      </Select>
                     ) : f.multiline ? (
-                      <textarea className="st-input" rows={2} value={item[f.key] ?? ""} onChange={(e) => up((s) => (s.items![i][f.key] = e.target.value), `i:${i}:${f.key}`)} />
+                      <TextArea rows={2} value={item[f.key] ?? ""} onChange={(e) => up((s) => (s.items![i][f.key] = e.target.value), `i:${i}:${f.key}`)} />
                     ) : (
-                      <input className="st-input" value={item[f.key] ?? ""} onChange={(e) => up((s) => (s.items![i][f.key] = e.target.value), `i:${i}:${f.key}`)} />
+                      <Input value={item[f.key] ?? ""} onChange={(e) => up((s) => (s.items![i][f.key] = e.target.value), `i:${i}:${f.key}`)} />
                     )}
                   </Field>
                 ))}
@@ -314,17 +314,17 @@ export function SectionInspector({ api, section }: { api: InspectorApi; section:
             return (
               <Field key={sd.key} label={sd.label} hint={sd.hint}>
                 {sd.type === "select" ? (
-                  <select className="st-input" value={String(v ?? "")} onChange={(e) => up((s) => (s.settings[sd.key] = e.target.value))}>
+                  <Select value={String(v ?? "")} onChange={(e) => up((s) => (s.settings[sd.key] = e.target.value))}>
                     {sd.options!.map((o) => (
                       <option key={o.value} value={o.value}>
                         {o.label}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 ) : sd.type === "number" ? (
                   <Slider value={Number(v) || 0} min={sd.min ?? 0} max={sd.max ?? 100} onChange={(nv) => up((s) => (s.settings[sd.key] = nv), `set:${sd.key}`)} />
                 ) : (
-                  <input className="st-input" value={String(v ?? "")} onChange={(e) => up((s) => (s.settings[sd.key] = e.target.value), `set:${sd.key}`)} />
+                  <Input value={String(v ?? "")} onChange={(e) => up((s) => (s.settings[sd.key] = e.target.value), `set:${sd.key}`)} />
                 )}
               </Field>
             );
@@ -367,7 +367,7 @@ export function SectionInspector({ api, section }: { api: InspectorApi; section:
         {st.bgType === "image" && (
           <>
             <Field label="Image URL" hint="Paste a link to a photo (https://…). Upload support can be added with a storage bucket.">
-              <input className="st-input" value={st.bgImage} placeholder="https://…" onChange={(e) => setStyle({ bgImage: e.target.value }, "img")} />
+              <Input value={st.bgImage} placeholder="https://…" onChange={(e) => setStyle({ bgImage: e.target.value }, "img")} />
             </Field>
             <Field label="Darken image">
               <Slider value={Math.round(st.overlay * 100)} min={0} max={90} unit="%" onChange={(v) => setStyle({ overlay: v / 100 }, "ov")} />
@@ -450,7 +450,7 @@ export function ThemeInspector({ api }: { api: InspectorApi }) {
     <div className="st-inspector">
       <Group title="Page">
         <Field label="Page name">
-          <input className="st-input" value={api.page.title} onChange={(e) => api.updateTheme((_, p) => (p.title = e.target.value), "title")} />
+          <Input value={api.page.title} onChange={(e) => api.updateTheme((_, p) => (p.title = e.target.value), "title")} />
         </Field>
       </Group>
       <Group title="Colour presets">
@@ -476,22 +476,22 @@ export function ThemeInspector({ api }: { api: InspectorApi }) {
       </Group>
       <Group title="Fonts">
         <Field label="Display (headings)">
-          <select className="st-input" value={th.fontDisplay} onChange={(e) => api.updateTheme((t) => (t.fontDisplay = e.target.value))}>
+          <Select value={th.fontDisplay} onChange={(e) => api.updateTheme((t) => (t.fontDisplay = e.target.value))}>
             {FONT_OPTIONS.map((f) => (
               <option key={f.value} value={f.value}>
                 {f.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
         <Field label="Body text">
-          <select className="st-input" value={th.fontBody} onChange={(e) => api.updateTheme((t) => (t.fontBody = e.target.value))}>
+          <Select value={th.fontBody} onChange={(e) => api.updateTheme((t) => (t.fontBody = e.target.value))}>
             {FONT_OPTIONS.map((f) => (
               <option key={f.value} value={f.value}>
                 {f.label}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </Group>
       <Group title="Shape">

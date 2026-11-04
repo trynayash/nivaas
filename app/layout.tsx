@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { siteUrl } from "@/lib/site-url";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl()),
   title: { default: "Nivaas — Flats, villas and plots in Bangalore, Pune, Mumbai and Murud Janjira", template: "%s · Nivaas" },
   description: "Search homes by locality, BHK and budget. Every listing shows its RERA status, carpet area and possession date, with similar homes nearby.",
 };

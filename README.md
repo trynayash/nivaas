@@ -18,14 +18,14 @@ npm run dev                  # http://localhost:3000 — Studio at /admin
 
 | Variable | Required | What it does |
 |---|---|---|
-| `ADMIN_PASSWORD` | **Yes** | Studio password. Read from the environment only — there is no default. In production the server **refuses to start** without it; in development the Studio login is disabled until it is set. |
-| `SESSION_SECRET` | No | Signs the admin cookie. Defaults to a key derived from `ADMIN_PASSWORD`. |
+| `ADMIN_PASSWORD` | **Yes** | Studio password, at least 12 characters. Read from the environment only — there is no default. In production the server **refuses to start** without it; in development the Studio login is disabled until it is set. |
+| `SESSION_SECRET` | No | Key that signs the admin cookie. If unset, a random key is generated once and kept in the database (`app_meta`), so sessions survive restarts and are shared by all server instances. It is never derived from the password. |
 | `DATABASE_URL` | On Vercel, yes | Postgres for CMS content (draft, published page, last 15 versions). Unset → `data/cms.json` (local only). On Vercel without it, saving fails with a clear error. |
 | `PG_POOL_MAX` | No | Connections per server instance (default 3). |
 | `CONTACT_WHATSAPP` | No | WhatsApp number for “#contact” buttons and the property page, e.g. `919561713120`. |
 | `BLOB_READ_WRITE_TOKEN` | On Vercel, for photos | Set automatically when a Vercel Blob store is connected. Locally, photos go to `data/uploads`. |
 | `SEED_SAMPLE_LISTINGS` | No | `false` = start a new database without the 177 sample listings. |
-| `ALLOW_INDEXING` / `SITE_URL` | No | Search engines are blocked until `ALLOW_INDEXING=true`. `SITE_URL` makes sitemap links absolute. |
+| `ALLOW_INDEXING` / `SITE_URL` | No | Search engines are blocked until `ALLOW_INDEXING=true`. `SITE_URL` is the public address used for canonical links, link previews and the sitemap; on Vercel it defaults to the production domain. |
 
 ### CMS storage
 
@@ -87,18 +87,20 @@ Studio (`/admin`) has three sections, linked from the top bar:
 - **Listings** — every property, with search and filters (city, live/draft, own/sample). Add or edit a listing with a form that checks everything before saving (location must exist in the city → locality → area list, carpet ≤ super built-up, RERA number or a reason it doesn’t apply, …). Upload up to 20 photos (resized in the browser, first one is the cover), save as a draft, preview it, publish, unpublish or delete. **Remove sample listings** deletes all demo data in one click; it never comes back.
 - **Enquiries** — “Request a call back” submissions from property pages, newest first, with status (new / contacted / closed), private notes, one-click WhatsApp or call, and a CSV download. The badge in the top bar counts new enquiries.
 
-The public enquiry form has a hidden honeypot field, ignores instant (bot) submissions, only accepts posts from the site itself, and limits each visitor to 5 enquiries per 10 minutes.
+The public enquiry form has a hidden honeypot field, ignores instant (bot) submissions, only accepts posts from the site itself, and limits each visitor to 5 enquiries per 10 minutes (200 per hour site-wide). Rate limits are stored in Postgres, so they hold across all server instances.
+
+Editing is safe with more than one tab or person: the landing-page draft and each listing carry a revision number, and a save based on an out-of-date copy is refused with a “changed somewhere else — reload” message instead of overwriting newer work. The editor saves in order, retries when the connection drops, saves before you leave for another Studio page, and keeps your work on screen if the session ends (log in again in a new tab, then press Ctrl+S).
 
 ## Data
 
-Everything lives in Postgres when `DATABASE_URL` is set: `cms_pages`, `cms_page_versions`, `properties`, `enquiries`, `app_meta`. Tables are created on first use (or with `npm run db:migrate`). Sample listings are inserted once per database; a marker in `app_meta` stops them being re-added after you delete them. Without `DATABASE_URL`, local development uses JSON files in `data/`.
+Everything lives in Postgres when `DATABASE_URL` is set: `cms_pages`, `cms_page_versions`, `properties`, `enquiries`, `admin_sessions`, `rate_limits`, `app_meta`. Tables are created on first use (or with `npm run db:migrate`). Sample listings are inserted once per database; a marker in `app_meta` stops them being re-added after you delete them. Without `DATABASE_URL`, local development uses JSON files in `data/`.
 
 ## Quality checks
 
 ```bash
 npm run typecheck        # TypeScript
 npm run lint             # ESLint (Next.js + React Hooks rules)
-npm test                 # 51 unit + storage tests (add TEST_DATABASE_URL=postgres://… to include Postgres)
+npm test                 # 68 unit + storage tests (add TEST_DATABASE_URL=postgres://… to include Postgres)
 E2E_PASSWORD=… npm run e2e   # 35 browser checks against a running server (E2E_BASE_URL, default localhost:3000)
 ```
 
@@ -128,7 +130,8 @@ lib/seed.ts             deterministic SAMPLE inventory (fictional)
 
 - **Sample data:** all listings, projects, developers and RERA numbers are **fictional**, generated by `lib/seed.ts`, and carry `isSample: true`. Sample listings show a "Sample listing" tag on cards and the property page, and their RERA panel says the number is illustrative instead of linking to the official portal. Real listings (`isSample: false`) get the portal link. Add real listings in Studio → Listings, then use **Remove sample listings**.
 - **Photos:** uploaded in Studio to Vercel Blob (`BLOB_READ_WRITE_TOKEN`). Listings without photos show a line drawing. Landing-page section backgrounds take an image URL.
-- **Auth:** there is a single admin password with an HMAC-signed cookie. Roles and permissions were not specified.
+- **Auth:** a single admin password. Logging in creates a server-side session (12 hours) referenced by a signed, HTTP-only cookie; logging out revokes it. Failed logins are limited per visitor and site-wide. Roles and permissions were not specified.
+- **Input:** every API checks the origin, validates the body with a schema (pages, listings, enquiries) and strips invisible control characters before anything reaches the database.
 
 ## Not yet built (needs product decisions)
 Multiple admin users and roles, adding new cities/localities from Studio (the location list is in `lib/locations.ts`), video, a map, email/SMS alerts for new enquiries, CRM integration, and visitor accounts.

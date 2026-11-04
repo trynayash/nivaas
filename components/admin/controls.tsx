@@ -1,16 +1,48 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { createContext, useContext, useId } from "react";
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 import { cx } from "@/lib/format";
 
+/**
+ * Field passes its visible label (and hint) to the control inside it, so every input, select,
+ * slider and colour picker gets an accessible name without wiring ids by hand.
+ */
+const FieldCtx = createContext<{ label?: string; hintId?: string }>({});
+const useFieldLabel = () => useContext(FieldCtx);
+
 export function Field({ label, children, hint, inline }: { label: string; children: ReactNode; hint?: string; inline?: boolean }) {
+  const hintId = useId();
   return (
-    <div className={cx("st-field", inline && "is-inline")}>
-      <span className="st-label">{label}</span>
-      <div className="st-control">{children}</div>
-      {hint && <p className="st-hint">{hint}</p>}
-    </div>
+    <FieldCtx.Provider value={{ label, hintId: hint ? hintId : undefined }}>
+      <div className={cx("st-field", inline && "is-inline")}>
+        <span className="st-label" aria-hidden="true">
+          {label}
+        </span>
+        <div className="st-control">{children}</div>
+        {hint && (
+          <p className="st-hint" id={hintId}>
+            {hint}
+          </p>
+        )}
+      </div>
+    </FieldCtx.Provider>
   );
+}
+
+export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
+  const { label, hintId } = useFieldLabel();
+  return <input aria-label={label} aria-describedby={hintId} {...props} className={cx("st-input", props.className)} />;
+}
+
+export function TextArea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const { label, hintId } = useFieldLabel();
+  return <textarea aria-label={label} aria-describedby={hintId} {...props} className={cx("st-input", props.className)} />;
+}
+
+export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
+  const { label, hintId } = useFieldLabel();
+  return <select aria-label={label} aria-describedby={hintId} {...props} className={cx("st-input", props.className)} />;
 }
 
 export function Group({ title, children, actions }: { title: string; children: ReactNode; actions?: ReactNode }) {
@@ -38,8 +70,9 @@ export function Segmented<T extends string | number>({
   ariaLabel?: string;
   small?: boolean;
 }) {
+  const { label } = useFieldLabel();
   return (
-    <div className={cx("st-seg", small && "is-small")} role="radiogroup" aria-label={ariaLabel}>
+    <div className={cx("st-seg", small && "is-small")} role="radiogroup" aria-label={ariaLabel ?? label}>
       {options.map((o) => (
         <button
           key={String(o.value)}
@@ -75,10 +108,19 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
   );
 }
 
+/** "#abc", "abc", "#AABBCC" → "#aabbcc"; anything else → null. The colour picker only understands six digits. */
+export function toHex6(v: string): string | null {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(v.trim());
+  if (!m) return null;
+  const h = m[1].length === 3 ? [...m[1]].map((c) => c + c).join("") : m[1];
+  return `#${h.toLowerCase()}`;
+}
+
 export function ColorInput({ value, onChange, onReset, placeholder = "Auto" }: { value?: string | null; onChange: (v: string) => void; onReset?: () => void; placeholder?: string }) {
+  const { label: fieldLabel } = useFieldLabel();
   return (
     <div className="st-color">
-      <input type="color" value={value || "#000000"} className={value ? undefined : "is-auto"} onChange={(e) => onChange(e.target.value)} aria-label="Pick colour" />
+      <input type="color" value={value || "#000000"} className={value ? undefined : "is-auto"} onChange={(e) => onChange(e.target.value)} aria-label={`${fieldLabel ?? "Colour"} — pick`} />
       <input
         type="text"
         key={value ?? "auto"}
@@ -86,11 +128,13 @@ export function ColorInput({ value, onChange, onReset, placeholder = "Auto" }: {
         placeholder={placeholder}
         onBlur={(e) => {
           const v = e.target.value.trim();
-          if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)) onChange(v);
+          if (!v && onReset && value) return onReset();
+          const hex = toHex6(v);
+          if (hex && hex !== value?.toLowerCase()) onChange(hex);
           else e.target.value = value ?? "";
         }}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-        aria-label="Hex colour"
+        aria-label={`${fieldLabel ?? "Colour"} — hex code`}
       />
       {onReset && value ? (
         <button type="button" className="st-reset" onClick={onReset} title="Reset to automatic">
@@ -121,9 +165,10 @@ export function Slider({
   onReset?: () => void;
 }) {
   const shown = value ?? placeholder ?? min;
+  const { label } = useFieldLabel();
   return (
     <div className="st-slider">
-      <input type="range" min={min} max={max} step={step} value={shown} onChange={(e) => onChange(Number(e.target.value))} className={cx(value == null && "is-auto")} />
+      <input type="range" aria-label={label} min={min} max={max} step={step} value={shown} onChange={(e) => onChange(Number(e.target.value))} className={cx(value == null && "is-auto")} />
       <div className="st-num">
         <input
           type="number"
@@ -132,12 +177,13 @@ export function Slider({
           step={step}
           value={value ?? ""}
           placeholder={placeholder !== undefined ? String(placeholder) : "auto"}
+          aria-label={label ? `${label} — exact value` : undefined}
           onChange={(e) => e.target.value !== "" && onChange(Number(e.target.value))}
         />
         {unit && <span>{unit}</span>}
       </div>
       {onReset && value != null && (
-        <button type="button" className="st-reset" onClick={onReset} title="Reset">
+        <button type="button" className="st-reset" onClick={onReset} title="Reset" aria-label={label ? `Reset ${label}` : "Reset"}>
           ↺
         </button>
       )}

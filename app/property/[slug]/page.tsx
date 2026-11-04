@@ -10,9 +10,9 @@ import { FloorPlan } from "@/components/FloorPlan";
 import { Gallery } from "@/components/Gallery";
 import { PropertyArt } from "@/components/PropertyArt";
 import { PropertyCard, SampleTag } from "@/components/PropertyCard";
-import { getPublishedPage } from "@/lib/cms/store";
+import { getSiteChrome } from "@/lib/cms/store";
 import { isAdmin } from "@/lib/auth";
-import { bhkLabel, formatNumber, formatPrice, formatSqft } from "@/lib/format";
+import { bhkLabel, floorLabel, formatNumber, formatPrice, formatSqft } from "@/lib/format";
 import { getAllProperties, getPropertyBySlug } from "@/lib/properties";
 import { recommend } from "@/lib/recommend";
 import { describeFilters, filtersFromParams, filtersToParams, hasAnyCriteria } from "@/lib/search";
@@ -25,7 +25,16 @@ type Props = { params: Promise<{ slug: string }>; searchParams: Promise<Record<s
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const p = await getPropertyBySlug((await params).slug);
   if (!p) return { title: "Property not found" };
-  return { title: `${p.title}, ${p.location.cityName} — ${formatPrice(p.price)}`, description: p.description };
+  const title = `${p.title}, ${p.location.cityName} — ${formatPrice(p.price)}`;
+  // Short description for search results and WhatsApp/Facebook link previews.
+  const description = p.description.length > 160 ? `${p.description.slice(0, 157).replace(/\s+\S*$/, "")}…` : p.description;
+  return {
+    title,
+    description,
+    // Every results link adds search context to the URL; tell search engines the one true address.
+    alternates: { canonical: `/property/${p.slug}` },
+    openGraph: { title, description, type: "website", siteName: "Nivaas", locale: "en_IN", ...(p.images[0] && { images: [p.images[0]] }) },
+  };
 }
 
 export default async function PropertyPage({ params, searchParams }: Props) {
@@ -37,8 +46,9 @@ export default async function PropertyPage({ params, searchParams }: Props) {
   if (!p) notFound();
 
   const { filters: context } = filtersFromParams(sp);
-  const fromSearch = hasAnyCriteria(context) || !!context.q;
-  const ctxQuery = fromSearch ? filtersToParams({ ...context, page: 1 }).toString() : "";
+  // Arrived from a results page (any filter, query, sort or the f=1 marker): keep that context.
+  const fromSearch = hasAnyCriteria(context) || !!context.q || context.sort !== "relevance" || sp.f === "1";
+  const ctxQuery = fromSearch ? filtersToParams(context, { page: true }).toString() : "";
   const all = await getAllProperties();
   const recs = recommend(p, all, fromSearch ? context : undefined, 8);
 
@@ -60,7 +70,7 @@ export default async function PropertyPage({ params, searchParams }: Props) {
           ...(p.plotArea ? [["Plot area", formatSqft(p.plotArea)]] : []),
           ["Bathrooms", String(p.bathrooms)],
           ["Balconies", String(p.balconies)],
-          ["Floor", p.floor !== undefined ? `${p.floor} of ${p.totalFloors}` : `${p.totalFloors} storeys`],
+          ...(floorLabel(p.floor, p.totalFloors) ? [["Floor", floorLabel(p.floor, p.totalFloors)!]] : []),
           ["Facing", p.facing],
           ["Furnishing", p.furnishing],
         ] as [string, string][])),
@@ -74,7 +84,7 @@ export default async function PropertyPage({ params, searchParams }: Props) {
   const specs: [string, string][] = [
     ["Project", p.projectName],
     ["Developer / seller", p.developer],
-    ["Overlooking", p.overlooking.join(", ")],
+    ...(p.overlooking.length ? ([["Overlooking", p.overlooking.join(", ")]] as [string, string][]) : []),
     ["Flooring", p.flooring],
     ["Water supply", p.waterSupply],
     ["Power backup", p.powerBackup],
@@ -82,10 +92,10 @@ export default async function PropertyPage({ params, searchParams }: Props) {
     ["Maintenance", p.maintenancePerMonth ? `₹${formatNumber(p.maintenancePerMonth)} / month` : "—"],
     ["Pincode", p.location.pincode],
     ["Listing ID", p.id],
-    ["Listed on", new Date(p.postedOn).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })],
+    ["Listed on", new Date(p.postedOn).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Kolkata" })],
   ];
 
-  const site = await getPublishedPage();
+  const site = await getSiteChrome();
   const loc = p.location;
   // Absolute URL for the WhatsApp message (without the visitor's search context).
   const h = await headers();
@@ -209,8 +219,8 @@ export default async function PropertyPage({ params, searchParams }: Props) {
               <h2 id="overview">About this home</h2>
               <p className="lead">{p.description}</p>
               <ul className="dash-list">
-                {p.highlights.map((h) => (
-                  <li key={h}>{h}</li>
+                {p.highlights.map((h, i) => (
+                  <li key={i}>{h}</li>
                 ))}
               </ul>
             </section>
@@ -252,11 +262,12 @@ export default async function PropertyPage({ params, searchParams }: Props) {
               <p className="loc-path">
                 {loc.cityName} › {loc.localityName} › {loc.areaName}
               </p>
+              {p.nearby.length > 0 && (
               <table className="nearby">
                 <caption className="sr-only">Distances to nearby places</caption>
                 <tbody>
-                  {p.nearby.map((n) => (
-                    <tr key={n.name}>
+                  {p.nearby.map((n, i) => (
+                    <tr key={i}>
                       <th scope="row">{n.name}</th>
                       <td className="nearby-kind">{n.kind}</td>
                       <td className="num">{n.distanceKm} km</td>
@@ -264,13 +275,16 @@ export default async function PropertyPage({ params, searchParams }: Props) {
                   ))}
                 </tbody>
               </table>
-              {p.isSample && <p className="hint">Distances in sample listings are approximate.</p>}
+              )}
+              {p.isSample && p.nearby.length > 0 && <p className="hint">Distances in sample listings are approximate.</p>}
             </section>
 
-            <section className="dsec" aria-labelledby="loan">
-              <h2 id="loan">Home loan</h2>
-              <p>Approved by {p.approvedBanks.join(", ")}.</p>
-            </section>
+            {p.approvedBanks.length > 0 && (
+              <section className="dsec" aria-labelledby="loan">
+                <h2 id="loan">Home loan</h2>
+                <p>Approved by {p.approvedBanks.join(", ")}.</p>
+              </section>
+            )}
           </div>
 
           <aside className="detail-aside">

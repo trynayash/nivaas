@@ -64,6 +64,28 @@ function contract(name: string, setup: () => Promise<void>) {
       expect(await m.enquiryStore().update("missing", { status: "closed" })).toBeUndefined();
     });
 
+    it("refuses a listing save based on an out-of-date revision", async () => {
+      const store = m.listingStore();
+      const sample = (await store.list())[0];
+      const first = await store.save({ ...sample, id: "LREVTEST", slug: "rev-test", isSample: false });
+      const rev = first.rev!;
+      const second = await store.save({ ...first, title: "Newer" }, rev);
+      expect(second.rev).toBe(rev + 1);
+      await expect(store.save({ ...first, title: "Stale" }, rev)).rejects.toBeInstanceOf(m.StaleListingError);
+      expect((await store.get("LREVTEST"))?.title).toBe("Newer");
+      await store.remove("LREVTEST");
+    });
+
+    it("refuses a CMS draft save or publish based on an out-of-date revision", async () => {
+      const page = m.defaultPage();
+      const { draftRev } = await m.getCmsDoc();
+      const saved = await m.saveDraft({ ...page, title: "Tab one" }, draftRev);
+      expect(saved.draftRev).toBe(draftRev + 1);
+      await expect(m.saveDraft({ ...page, title: "Stale tab" }, draftRev)).rejects.toBeInstanceOf(m.RevisionConflict);
+      await expect(m.publish({ ...page, title: "Stale publish" }, draftRev)).rejects.toBeInstanceOf(m.RevisionConflict);
+      expect((await m.getCmsDoc()).draft.title).toBe("Tab one");
+    });
+
     it("keeps draft and published CMS pages apart and caps history at 15", async () => {
       const page = m.defaultPage();
       await m.saveDraft({ ...page, title: "Draft only" });

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { PropertyArt } from "./PropertyArt";
-import { bhkLabel, cx, formatNumber, formatPrice } from "@/lib/format";
+import { bhkLabel, cx, floorLabel, formatNumber, formatPrice } from "@/lib/format";
 import type { PropertySummary } from "@/lib/types";
 
 export function SampleTag({ className }: { className?: string }) {
@@ -29,6 +29,7 @@ export function PropertyCard({
   const url = href ?? `/property/${p.slug}`;
   const ppsf = Math.round(p.price / p.superBuiltUpArea);
   const isPlot = p.type === "Plot";
+  const floor = floorLabel(p.floor, p.totalFloors); // "3 of 12", "Ground floor", "4 storeys" or null
   const typeLabel = isPlot ? "Plot" : `${bhkLabel(p.bhk)} ${p.type === "Apartment" ? "flat" : p.type.toLowerCase()}`;
 
   const facts = [
@@ -41,7 +42,7 @@ export function PropertyCard({
   const body = (
     <>
       <div className="pc-media">
-        <PropertyArt id={p.id} type={p.type} hue={p.hue} images={p.images} label={p.title} className="pc-art" />
+        <PropertyArt id={p.id} type={p.type} hue={p.hue} images={p.images} plotArea={p.plotArea} label={p.title} className="pc-art" />
         {p.isSample && <SampleTag className="pc-sample" />}
       </div>
       <div className="pc-body">
@@ -60,7 +61,7 @@ export function PropertyCard({
         <p className="pc-facts">{facts.join(" · ")}</p>
         {variant === "row" && (
           <p className="pc-meta">
-            {p.floor !== undefined ? `Floor ${p.floor} of ${p.totalFloors} · ` : ""}
+            {floor ? `${/^\d/.test(floor) ? `Floor ${floor}` : floor} · ` : ""}
             {p.furnishing}
             {p.amenities.length ? ` · ${p.amenities.slice(0, 3).join(", ")}` : ""}
           </p>

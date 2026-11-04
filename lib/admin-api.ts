@@ -6,7 +6,8 @@ import { isAdmin } from "./auth";
 export function sameOrigin(req: Request): boolean {
   const origin = req.headers.get("origin");
   if (!origin) return req.method === "GET" || req.method === "HEAD";
-  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  // Proxies may send a comma-separated chain; the first entry is the host the browser used.
+  const host = (req.headers.get("x-forwarded-host") ?? req.headers.get("host") ?? "").split(",")[0].trim();
   try {
     return new URL(origin).host === host;
   } catch {

@@ -14,7 +14,9 @@ function mulberry32(seed: number) {
   };
 }
 
-const rnd = mulberry32(20261104);
+// Re-created on every generateProperties() call so the output is identical each time.
+const SEED = 20261104;
+let rnd = mulberry32(SEED);
 const between = (a: number, b: number) => a + rnd() * (b - a);
 const int = (a: number, b: number) => Math.floor(between(a, b + 1));
 const pick = <T,>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)];
@@ -303,6 +305,7 @@ function makeProperty(city: CityNode, loc: LocalityNode, overrides: Partial<{ ty
 
 export function generateProperties(): Property[] {
   serial = 0;
+  rnd = mulberry32(SEED);
   const out: Property[] = [];
   const perLocality: Record<string, number> = { bangalore: 9, "murud-janjira": 5, pune: 6, mumbai: 6 };
   for (const c of CITIES) {

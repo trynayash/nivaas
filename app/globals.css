@@ -429,7 +429,8 @@ a.pcard:hover .pc-title { text-decoration: underline; text-underline-offset: 3px
 .check input { width: 16px; height: 16px; accent-color: var(--c-ink); flex: none; margin: 0; }
 .check span { flex: 1; }
 .check em { font-style: normal; font-size: 13px; color: var(--c-muted); font-variant-numeric: tabular-nums; }
-.check.is-empty { opacity: 0.45; }
+/* Zero-result options: muted, but still readable (opacity dropped contrast below 4.5:1) */
+.check.is-empty, .check.is-empty em { color: var(--c-muted); }
 .check-sm { font-size: 13px; }
 .loc-tree { display: flex; flex-direction: column; margin-top: 4px; }
 .loc-areas { margin: 2px 0 6px 7px; padding-left: 18px; border-left: 1px solid var(--rule-strong); }
@@ -685,8 +686,10 @@ a.pcard:hover .pc-title { text-decoration: underline; text-underline-offset: 3px
 .st-undo button { width: 32px; height: 32px; border: 0; background: var(--st-panel); font-size: 16px; }
 .st-undo button + button { border-left: 1px solid var(--st-line); }
 .st-undo button:hover:not(:disabled) { background: var(--st-bg); }
-.st-status { color: var(--st-muted); font-size: 12px; min-width: 150px; text-align: right; }
+.st-status { color: var(--st-muted); font-size: 12px; min-width: 150px; max-width: 320px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-status.is-error { color: #b3261e; font-weight: 600; }
+.st-status .text-link { font: inherit; color: inherit; padding: 0; border: 0; background: none; text-decoration: underline; text-underline-offset: 2px; }
+.st-nav-wrap { display: contents; }
 
 .st-btn {
   display: inline-flex;
@@ -750,7 +753,7 @@ a.pcard:hover .pc-title { text-decoration: underline; text-underline-offset: 3px
 .st-grip { color: #aaa69c; font-size: 11px; letter-spacing: -2px; width: 14px; }
 .st-row-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-row-actions { display: flex; opacity: 0; transition: opacity 0.12s; padding-right: 4px; }
-.st-row:hover .st-row-actions, .st-row.is-on .st-row-actions, .st-row.is-hidden .st-row-actions { opacity: 1; }
+.st-row:hover .st-row-actions, .st-row:focus-within .st-row-actions, .st-row.is-on .st-row-actions, .st-row.is-hidden .st-row-actions { opacity: 1; }
 .st-row-actions button { border: 0; background: transparent; width: 24px; height: 26px; border-radius: 4px; color: var(--st-muted); font-size: 13px; }
 .st-row-actions button:hover { background: rgb(0 0 0 / 0.06); color: var(--st-ink); }
 .st-add { padding: 12px; }
@@ -864,12 +867,13 @@ a.pcard:hover .pc-title { text-decoration: underline; text-underline-offset: 3px
   font-size: 13px;
 }
 .st-toast button { border: 0; background: transparent; color: #9cc6f5; text-decoration: underline; text-underline-offset: 3px; }
+.st-toast .st-toast-close { color: #c9c6bd; text-decoration: none; font-size: 16px; line-height: 1; padding: 0 2px; }
 
 @media (max-width: 1100px) {
   .studio { grid-template-columns: 220px minmax(0, 1fr) 290px; }
   .st-brand { width: auto; }
   .st-brand span { display: none; }
-  .st-status { display: none; }
+  .st-status:not(.is-error) { display: none; }
 }
 
 /* Login */
@@ -1047,3 +1051,14 @@ a.pcard:hover .pc-title { text-decoration: underline; text-underline-offset: 3px
 /* The aside now holds price + enquiry form — taller than a laptop screen, so it must not be sticky. */
 .detail-aside { position: static; }
 .ed-empty-note { padding: 18px; border: 1px dashed var(--rule-strong); border-radius: var(--radius); }
+
+/* Keyboard users can jump past the header */
+.skip-link { position: absolute; left: 12px; top: -48px; z-index: 200; padding: 8px 14px; background: var(--c-ink); color: var(--c-bg); border-radius: var(--radius); font-size: 14px; transition: top 0.15s; }
+.skip-link:focus { top: 12px; }
+
+/* Studio colours on the login page too (the button was white-on-white) */
+.login { --st-bg: #ebe9e4; --st-panel: #fbfaf8; --st-ink: #1d211e; --st-muted: #6a675f; --st-line: #dedbd3; --st-hl: #0b72d9; --st-hl-soft: #e6f0fb; color: var(--st-ink); }
+
+/* Blue used for text links in Studio must reach 4.5:1 on the grey background */
+.studio, .studio-page, .login { --st-link: #0a5aa8; }
+.studio-page .st-crumb a, .st-crumb button, .lf-drop .text-link { color: var(--st-link); }

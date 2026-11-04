@@ -4,11 +4,11 @@ import { SiteShell } from "@/components/cms/PageRenderer";
 import { PropertyCard } from "@/components/PropertyCard";
 import { SearchBar } from "@/components/SearchBar";
 import { FiltersPanel, SortSelect } from "@/components/search/FiltersPanel";
-import { getPublishedPage } from "@/lib/cms/store";
+import { getSiteChrome } from "@/lib/cms/store";
 import { DEFAULT_CONTACT_MESSAGE, whatsappFromEnv } from "@/lib/contact";
 import { getCity } from "@/lib/locations";
 import { getAllProperties } from "@/lib/properties";
-import { Filters, closeMatches, computeFacets, describeFilters, filtersFromParams, filtersToParams, priceLabel, search } from "@/lib/search";
+import { Filters, closeMatches, parseQuery, computeFacets, describeFilters, filtersFromParams, filtersToParams, priceLabel, search } from "@/lib/search";
 import { toSummary } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +30,7 @@ function activeChips(f: Filters): { label: string; patch: Partial<Filters> }[] {
     for (const a of l.areas) if (f.areas.includes(a.slug)) out.push({ label: a.name, patch: { areas: f.areas.filter((x) => x !== a.slug) } });
   }
   for (const b of f.bhk) out.push({ label: b === 0 ? "Plot" : `${b} BHK`, patch: { bhk: f.bhk.filter((x) => x !== b) } });
+  // (keys include the index, so e.g. "Plot" from both BHK and type never collide)
   const pl = priceLabel(f.minPrice, f.maxPrice);
   if (pl) out.push({ label: pl.charAt(0).toUpperCase() + pl.slice(1), patch: { minPrice: undefined, maxPrice: undefined } });
   for (const t of f.types) out.push({ label: t, patch: { types: f.types.filter((x) => x !== t) } });
@@ -43,16 +44,18 @@ function activeChips(f: Filters): { label: string; patch: Partial<Filters> }[] {
 export default async function SearchPage({ searchParams }: { searchParams: SP }) {
   const sp = await searchParams;
   const { filters, parsed } = filtersFromParams(sp);
-  const unmatched = (typeof sp.um === "string" ? sp.um : undefined) ?? parsed?.unmatched;
+  // Recomputed from the query on the server — never echo free text from the URL.
+  const unmatched = parsed?.unmatched ?? (filters.q ? parseQuery(filters.q).unmatched : undefined);
   const all = await getAllProperties();
   const { total, results, page, pages, allMatched } = search(all, filters);
   const facets = computeFacets(all, filters);
   const close = closeMatches(all, filters, new Set(allMatched.map((p) => p.id)), results.length ? 6 : 9);
-  const ctxParams = filtersToParams({ ...filters, page: 1 }).toString();
+  // Result links carry the full context (incl. page) so "Back to results" returns to this exact page.
+  const ctxParams = filtersToParams({ ...filters, page }, { page: true }).toString();
   const title = describeFilters(filters);
   const chips = activeChips(filters);
   const pageHref = (n: number) => `/search?${filtersToParams({ ...filters, page: n }, { page: true }).toString()}`;
-  const site = await getPublishedPage();
+  const site = await getSiteChrome();
 
   return (
     <SiteShell page={site} contact={{ whatsapp: whatsappFromEnv(), message: DEFAULT_CONTACT_MESSAGE }}>
@@ -84,8 +87,8 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
 
           {chips.length > 0 && (
             <div className="active-chips">
-              {chips.map((c) => (
-                <Link key={c.label} className="chip chip-sm chip-remove" href={`/search?${filtersToParams({ ...filters, ...c.patch, page: 1 }).toString()}`} aria-label={`Remove filter ${c.label}`}>
+              {chips.map((c, i) => (
+                <Link key={`${i}-${c.label}`} className="chip chip-sm chip-remove" href={`/search?${filtersToParams({ ...filters, ...c.patch, q: undefined, page: 1 }).toString()}`} aria-label={`Remove filter ${c.label}`}>
                   {c.label} <span aria-hidden="true">×</span>
                 </Link>
               ))}
@@ -97,6 +100,7 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
 
           {results.length > 0 ? (
             <div className="result-list">
+              <h2 className="sr-only">Results</h2>
               {results.map((p) => (
                 <PropertyCard key={p.id} p={toSummary(p)} variant="row" href={`/property/${p.slug}?${ctxParams}`} />
               ))}

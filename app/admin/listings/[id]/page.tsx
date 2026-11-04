@@ -28,7 +28,7 @@ export default async function EditListing({ params, searchParams }: { params: Pr
         </p>
         <h1>{p.title}</h1>
         {sp.saved && <p className="st-flash">Listing created{p.published ? " and published" : " as a draft"}.</p>}
-        <ListingForm initial={toInput(p)} id={p.id} slug={p.slug} isSample={p.isSample} />
+        <ListingForm initial={toInput(p)} id={p.id} slug={p.slug} isSample={p.isSample} rev={p.rev} />
       </main>
     </div>
   );

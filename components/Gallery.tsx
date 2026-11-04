@@ -37,7 +37,7 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
       {images.length > 1 && (
         <ol className="gallery-thumbs">
           {images.map((src, j) => (
-            <li key={src}>
+            <li key={j}>
               <button type="button" className={cx(j === i && "is-on")} onClick={() => setI(j)} aria-label={`Show photo ${j + 1}`} aria-current={j === i || undefined}>
                 <img src={src} alt="" loading="lazy" />
               </button>

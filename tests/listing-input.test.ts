@@ -48,3 +48,57 @@ describe("listing form schema", () => {
     expect(toProperty(r, { id: p.id, existing: p }).slug).toBe(p.slug);
   });
 });
+
+describe("sample generator", () => {
+  it("returns identical data on every call", () => {
+    const a = generateProperties();
+    const b = generateProperties();
+    expect(b.map((p) => p.slug)).toEqual(a.map((p) => p.slug));
+    expect(JSON.stringify(b)).toBe(JSON.stringify(a));
+  });
+});
+
+describe("hidden form fields", () => {
+  const complete = () => {
+    const p = samples.find((x) => x.type === "Apartment" && x.status === "Ready to Move")!;
+    return toInput(p);
+  };
+
+  it("switching to Plot ignores half-typed flat fields", () => {
+    const input = { ...complete(), type: "Plot", plotArea: 2400, carpetArea: "abc" as never, bathrooms: "" as never, floor: 99 };
+    const r = validateListing(input);
+    expect(r.ok ? "ok" : JSON.stringify(r.errors)).toBe("ok");
+    if (r.ok) {
+      expect(r.data.bhk).toBe(0);
+      expect(r.data.carpetArea).toBeUndefined();
+      expect(r.data.floor).toBeUndefined();
+    }
+  });
+
+  it("drops a stale plot area from a flat and age from an under-construction home", () => {
+    const r = validateListing({ ...complete(), plotArea: 5, status: "Under Construction", possession: "Dec 2027", ageYears: "x" as never });
+    expect(r.ok ? "ok" : JSON.stringify(r.errors)).toBe("ok");
+    if (r.ok) {
+      expect(r.data.plotArea).toBeUndefined();
+      expect(r.data.ageYears).toBeUndefined();
+    }
+  });
+
+  it("ignores empty nearby rows and counts list limits after removing blank lines", () => {
+    const r = validateListing({
+      ...complete(),
+      nearby: [{ kind: "", name: "", distanceKm: "" }],
+      highlights: ["One", "", "Two", "", "", "", "", "", "", "", ""],
+    });
+    expect(r.ok ? "ok" : JSON.stringify(r.errors)).toBe("ok");
+    if (r.ok) {
+      expect(r.data.nearby).toEqual([]);
+      expect(r.data.highlights).toEqual(["One", "Two"]);
+    }
+  });
+
+  it("still enforces the limit on real items", () => {
+    const r = validateListing({ ...complete(), highlights: Array.from({ length: 9 }, (_, i) => `Point ${i}`) });
+    expect(r.ok).toBe(false);
+  });
+});

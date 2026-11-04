@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageRenderer } from "@/components/cms/PageRenderer";
 import { isAdmin } from "@/lib/auth";
-import { getCmsDoc } from "@/lib/cms/store";
+import { getCmsDoc, getPublishedPage } from "@/lib/cms/store";
 import { landingContext } from "@/lib/landing";
 import { DEFAULT_CONTACT_MESSAGE, whatsappFromEnv } from "@/lib/contact";
 
@@ -10,8 +10,8 @@ export const dynamic = "force-dynamic";
 export default async function Home({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const sp = await searchParams;
   const preview = sp.preview === "draft" && (await isAdmin());
-  const doc = await getCmsDoc();
-  const page = preview ? doc.draft : doc.published;
+  // Visitors only need the published page; the full document (draft + history) is for previews.
+  const page = preview ? (await getCmsDoc()).draft : await getPublishedPage();
   return (
     <>
       {preview && (

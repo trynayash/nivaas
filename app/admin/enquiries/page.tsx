@@ -17,15 +17,21 @@ export default async function EnquiriesAdmin({ searchParams }: { searchParams: P
   if (!(await isAdmin())) redirect("/admin/login");
   const sp = await searchParams;
   const status = (ENQUIRY_STATUSES as readonly string[]).includes(sp.status ?? "") ? (sp.status as EnquiryStatus) : undefined;
-  const all = await enquiryStore().list();
-  const rows = status ? all.filter((e) => e.status === status) : all;
-  const counts = Object.fromEntries(["all", ...ENQUIRY_STATUSES].map((s) => [s, s === "all" ? all.length : all.filter((e) => e.status === s).length]));
+  const PER_PAGE = 50;
+  const page = Math.max(1, Math.floor(Number(sp.page)) || 1);
+  const [counts, rows] = await Promise.all([
+    enquiryStore().counts(),
+    enquiryStore().list({ status, limit: PER_PAGE, offset: (page - 1) * PER_PAGE }),
+  ]);
+  const total = status ? counts[status] : counts.all;
+  const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const pageHref = (n: number) => `/admin/enquiries?${new URLSearchParams({ ...(status && { status }), ...(n > 1 && { page: String(n) }) }).toString()}`;
 
   return (
     <div className="studio-page">
       <link rel="stylesheet" href={STUDIO_FONTS_HREF} precedence="default" />
       <StudioHeader active="enquiries" newEnquiries={counts.new}>
-        {all.length > 0 && (
+        {counts.all > 0 && (
           // A file download from an API route, so a plain <a download> rather than <Link>.
           <a className="st-btn" href="/api/admin/enquiries/export" download>
             Download CSV
@@ -40,7 +46,7 @@ export default async function EnquiriesAdmin({ searchParams }: { searchParams: P
           </div>
         </div>
         <nav className="st-tabs-row" aria-label="Filter by status">
-          {["all", ...ENQUIRY_STATUSES].map((s) => (
+          {(["all", ...ENQUIRY_STATUSES] as const).map((s) => (
             <Link key={s} href={s === "all" ? "/admin/enquiries" : `/admin/enquiries?status=${s}`} className={cx((status ?? "all") === s && "is-on")}>
               {LABEL[s]} <span className="num">{counts[s]}</span>
             </Link>
@@ -48,7 +54,7 @@ export default async function EnquiriesAdmin({ searchParams }: { searchParams: P
         </nav>
         {rows.length === 0 ? (
           <div className="st-empty-box">
-            <p>{all.length ? "Nothing with this status." : "No enquiries yet. They appear here when visitors use “Request a call back” on a property page."}</p>
+            <p>{counts.all ? "Nothing here." : "No enquiries yet. They appear here when visitors use “Request a call back” on a property page."}</p>
           </div>
         ) : (
           <table className="st-table st-table-enq">
@@ -69,6 +75,15 @@ export default async function EnquiriesAdmin({ searchParams }: { searchParams: P
               ))}
             </tbody>
           </table>
+        )}
+        {pages > 1 && (
+          <nav className="st-pager" aria-label="Pages">
+            {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
+              <Link key={n} href={pageHref(n)} className={n === page ? "is-on" : undefined} aria-current={n === page ? "page" : undefined}>
+                {n}
+              </Link>
+            ))}
+          </nav>
         )}
       </main>
     </div>

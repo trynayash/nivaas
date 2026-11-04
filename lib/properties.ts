@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { listingStore } from "./listings/store";
+import { SLUG_RE } from "./sanitize";
 import type { Property } from "./types";
 
 /**
@@ -11,6 +12,7 @@ export const getAllProperties = cache(async (): Promise<Property[]> => listingSt
 
 /** A listing by slug. Drafts are only returned when `includeDrafts` is set (admin preview). */
 export const getPropertyBySlug = cache(async (slug: string, includeDrafts = false): Promise<Property | undefined> => {
+  if (!SLUG_RE.test(slug)) return undefined; // malformed URL: it can't match a listing
   const p = await listingStore().getBySlug(slug);
   if (!p) return undefined;
   return p.published || includeDrafts ? p : undefined;

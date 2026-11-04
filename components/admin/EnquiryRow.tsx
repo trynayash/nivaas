@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Enquiry, EnquiryStatus } from "@/lib/enquiries/store";
 import { normalizeWhatsApp, waLink } from "@/lib/contact";
+import { api } from "@/lib/client-api";
 
 export function EnquiryRow({ e }: { e: Enquiry }) {
   const [status, setStatus] = useState<EnquiryStatus>(e.status);
@@ -14,10 +15,10 @@ export function EnquiryRow({ e }: { e: Enquiry }) {
 
   async function patch(body: { status?: EnquiryStatus; note?: string }) {
     setBusy(true);
-    const res = await fetch(`/api/admin/enquiries/${e.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    const r = await api(`/api/admin/enquiries/${e.id}`, { method: "PATCH", body });
     setBusy(false);
-    if (!res.ok) {
-      alert((await res.json().catch(() => ({}))).error ?? "Couldn’t save.");
+    if (!r.ok) {
+      alert(r.error);
       return false;
     }
     return true;

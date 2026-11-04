@@ -3,7 +3,8 @@ import { enquiryStore } from "@/lib/enquiries/store";
 
 const cell = (v: unknown) => {
   let s = v === null || v === undefined ? "" : String(v);
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; // stop spreadsheet formula injection
+  // Stop spreadsheet formula injection, but leave plain phone numbers like +919876543210 alone.
+  if (/^[=+\-@\t\r]/.test(s) && !/^\+\d{6,15}$/.test(s)) s = `'${s}`;
   return `"${s.replace(/"/g, '""')}"`;
 };
 

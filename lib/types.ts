@@ -78,6 +78,8 @@ export interface Property {
   published: boolean;
   createdAt?: string;
   updatedAt?: string;
+  /** Increments on every save; used to reject saves from stale forms. */
+  rev?: number;
 }
 
 /** Light shape sent to client components & cards. */
@@ -107,6 +109,7 @@ export interface PropertySummary {
   floor?: number;
   totalFloors?: number;
   possession: string;
+  plotArea?: number;
 }
 
 export function toSummary(p: Property): PropertySummary {
@@ -130,12 +133,13 @@ export function toSummary(p: Property): PropertySummary {
     featured: p.featured,
     hue: p.hue,
     postedOn: p.postedOn,
-    images: p.images,
+    images: p.images.slice(0, 1), // cards only show the cover photo
     isSample: !!p.isSample,
     developer: p.developer,
     floor: p.floor,
     totalFloors: p.totalFloors,
     possession: p.possession,
+    plotArea: p.type === "Plot" ? p.plotArea ?? p.superBuiltUpArea : undefined,
   };
 }
 

@@ -1,6 +1,7 @@
 import "server-only";
+import { attachDatabasePool } from "@vercel/functions";
 import { Pool, type PoolClient } from "pg";
-import { SCHEMA_SQL } from "./schema";
+import { SCHEMA_SQL, SCHEMA_VERSION } from "./schema";
 
 /** True when DATABASE_URL is set — every store then uses Postgres. */
 export const hasDatabase = () => !!process.env.DATABASE_URL;
@@ -34,6 +35,8 @@ export function pool(): Pool {
       connectionTimeoutMillis: 8_000,
     });
     g.__nivaasPool.on("error", (err) => console.error("[nivaas] idle Postgres client error", err));
+    // On Vercel, release idle connections before a function instance is suspended.
+    if (process.env.VERCEL) attachDatabasePool(g.__nivaasPool);
   }
   return g.__nivaasPool;
 }
@@ -45,15 +48,37 @@ export function onSchemaReset(fn: () => void) {
   resetHooks.add(fn);
 }
 
-function ensureSchema(): Promise<void> {
-  if (!g.__nivaasSchema) {
-    g.__nivaasSchema = pool()
-      .query(SCHEMA_SQL)
-      .then(() => undefined)
-      .catch((err) => {
-        g.__nivaasSchema = undefined; // retry on the next request
-        throw err;
-      });
+/**
+ * Apply the schema once per database version, not on every cold start: a cheap version check
+ * first, then the DDL under an advisory lock so concurrent instances can't race each other.
+ */
+async function applySchema(force = false) {
+  const current = await pool()
+    .query<{ value: number }>(`select value from app_meta where key = 'schema_version'`)
+    .then((r) => Number(r.rows[0]?.value ?? 0))
+    .catch(() => 0); // app_meta missing → fresh database
+  if (current >= SCHEMA_VERSION && !force) return;
+  const c = await pool().connect();
+  try {
+    await c.query("select pg_advisory_lock(4207730)");
+    await c.query(SCHEMA_SQL);
+    await c.query(
+      `insert into app_meta (key, value) values ('schema_version', to_jsonb($1::int))
+       on conflict (key) do update set value = excluded.value`,
+      [SCHEMA_VERSION]
+    );
+  } finally {
+    await c.query("select pg_advisory_unlock(4207730)").catch(() => undefined);
+    c.release();
+  }
+}
+
+function ensureSchema(force = false): Promise<void> {
+  if (!g.__nivaasSchema || force) {
+    g.__nivaasSchema = applySchema(force).catch((err) => {
+      g.__nivaasSchema = undefined; // retry on the next request
+      throw err;
+    });
   }
   return g.__nivaasSchema;
 }
@@ -68,9 +93,8 @@ export async function withSchema<T>(fn: () => Promise<T>): Promise<T> {
     return await fn();
   } catch (err) {
     if ((err as { code?: string }).code !== "42P01") throw err;
-    g.__nivaasSchema = undefined;
     for (const fn of resetHooks) fn();
-    await ensureSchema();
+    await ensureSchema(true); // a table is missing even though the version says otherwise
     return fn();
   }
 }

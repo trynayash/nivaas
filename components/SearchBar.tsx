@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FLAT_LOCATIONS, FlatLocation, norm } from "@/lib/locations";
 import { parseQuery, priceLabel, queryToParams } from "@/lib/search";
@@ -39,8 +39,11 @@ export function SearchBar({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const inputRef = useRef<HTMLInputElement>(null);
+  const uid = useId(); // several search bars can share a page (hero + header), so ids must be unique
+  const listId = `${uid}-suggestions`;
 
   const { items, replaceWords } = useMemo(() => suggest(q), [q]);
+  const listOpen = open && items.length > 0 && !inert;
   const parsed = useMemo(() => (q.trim() ? parseQuery(q) : null), [q]);
 
   const chips: string[] = [];
@@ -79,7 +82,7 @@ export function SearchBar({
       role="search"
       onSubmit={(e) => {
         e.preventDefault();
-        if (open && active >= 0 && items[active]) return pick(items[active]);
+        if (listOpen && active >= 0 && items[active]) return pick(items[active]);
         go(q);
       }}
       action="/search"
@@ -95,9 +98,9 @@ export function SearchBar({
           aria-label="Search properties by city, locality, configuration or budget"
           role="combobox"
           aria-autocomplete="list"
-          aria-controls="sb-suggestions"
-          aria-expanded={open && items.length > 0}
-          aria-activedescendant={open && active >= 0 ? `sb-opt-${active}` : undefined}
+          aria-controls={listOpen ? listId : undefined}
+          aria-expanded={listOpen}
+          aria-activedescendant={listOpen && active >= 0 ? `${uid}-opt-${active}` : undefined}
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -106,7 +109,7 @@ export function SearchBar({
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
           onKeyDown={(e) => {
-            if (!open || !items.length) return;
+            if (!listOpen) return;
             if (e.key === "ArrowDown") {
               e.preventDefault();
               setActive((a) => (a + 1) % items.length);
@@ -120,12 +123,12 @@ export function SearchBar({
         <button type="submit" className="btn btn-primary sb-submit" tabIndex={inert ? -1 : undefined}>
           Search
         </button>
-        {open && items.length > 0 && !inert && (
-          <ul className="sb-suggest" role="listbox" id="sb-suggestions">
+        {listOpen && (
+          <ul className="sb-suggest" role="listbox" id={listId} aria-label="Matching locations">
             {items.map((l, i) => (
               <li
                 key={l.label}
-                id={`sb-opt-${i}`}
+                id={`${uid}-opt-${i}`}
                 role="option"
                 aria-selected={i === active}
                 className={cx(i === active && "is-active")}

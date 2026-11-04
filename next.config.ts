@@ -18,6 +18,7 @@ const nextConfig: NextConfig = {
       },
       // Studio and APIs are never cached by browsers or shared caches.
       { source: "/admin/:path*", headers: [{ key: "Cache-Control", value: "no-store" }, { key: "X-Robots-Tag", value: "noindex" }] },
+      { source: "/api/:path*", headers: [{ key: "Cache-Control", value: "no-store" }, { key: "X-Robots-Tag", value: "noindex" }] },
     ];
   },
 };

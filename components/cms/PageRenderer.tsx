@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { Page, Section, SECTION_DEFS, TextBlock, TextStyle, fontsHref, sectionCss, textCss, themeCss } from "@/lib/cms/schema";
+import { Page, Section, SECTION_DEFS, TAGS, TextBlock, TextStyle, fontsHref, sectionCss, textCss, themeCss } from "@/lib/cms/schema";
 import { getCity } from "@/lib/locations";
 import { queryToParams } from "@/lib/search";
 import { cx } from "@/lib/format";
@@ -57,10 +57,40 @@ function CmsLink({ href, ctx, className, children }: { href: string; ctx: Render
 // Editable text
 // ---------------------------------------------------------------------------
 
+/**
+ * Text the user typed into a contentEditable element. Reads the DOM rather than innerText, which
+ * reflects CSS (text-transform: uppercase would otherwise be saved as capital letters).
+ */
+export function readEditable(el: HTMLElement): string {
+  let out = "";
+  const walk = (n: Node) => {
+    n.childNodes.forEach((c) => {
+      if (c.nodeType === Node.TEXT_NODE) out += c.textContent ?? "";
+      else if (c.nodeName === "BR") out += "\n";
+      else if (c.nodeType === Node.ELEMENT_NODE) {
+        if ((c.nodeName === "DIV" || c.nodeName === "P") && out && !out.endsWith("\n")) out += "\n";
+        walk(c);
+      }
+    });
+  };
+  walk(el);
+  return out.replace(/\u00a0/g, " ").replace(/\n+$/, "");
+}
+
+/** Commit what was typed into an inline-edited element, if anything. */
+function commitEditable(el: HTMLElement, current: string, save: (text: string) => void) {
+  if (el.dataset.edTyped !== "1") return; // focus and blur alone never rewrite the text
+  delete el.dataset.edTyped;
+  const v = readEditable(el);
+  if (v !== current) save(v);
+}
+
 function Editable({ s, path, block, className, ctx }: { s: Section; path: string; block: TextBlock; className?: string; ctx: RenderCtx }) {
   const ref = useRef<HTMLElement>(null);
-  const Tag = (block.style.tag || "p") as "p";
-  const style = textCss(block.style);
+  // Only known text tags are ever rendered (defence in depth on top of save-time validation).
+  const Tag = ((TAGS as string[]).includes(block.style?.tag) ? block.style.tag : "p") as "p";
+  // Line breaks typed with Shift+Enter show the same way on the live page and in the editor.
+  const style = { ...textCss(block.style), whiteSpace: "pre-line" } as CSSProperties;
   const ed = ctx.editor;
   if (!ed) {
     return (
@@ -77,6 +107,8 @@ function Editable({ s, path, block, className, ctx }: { s: Section; path: string
       className={cx(className, "ed-text", selected && "is-selected")}
       style={style}
       data-ed-tag={block.style.tag.toUpperCase()}
+      data-ed-sec={s.id}
+      data-ed-path={path}
       contentEditable={selected}
       suppressContentEditableWarning
       spellCheck={selected}
@@ -89,16 +121,15 @@ function Editable({ s, path, block, className, ctx }: { s: Section; path: string
           requestAnimationFrame(() => el.isConnected && el.focus());
         }
       }}
-      onBlur={(e) => {
-        const v = e.currentTarget.innerText.replace(/\n$/, "");
-        if (v !== block.text) ed.setText(s.id, path, v);
+      onInput={(e) => {
+        e.currentTarget.dataset.edTyped = "1";
       }}
+      onBlur={(e) => commitEditable(e.currentTarget, block.text, (v) => ed.setText(s.id, path, v))}
       onKeyDown={(e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
+        if ((e.key === "Enter" && !e.shiftKey) || e.key === "Escape") {
           e.preventDefault();
           (e.currentTarget as HTMLElement).blur();
         }
-        if (e.key === "Escape") (e.currentTarget as HTMLElement).blur();
       }}
       onPaste={(e) => {
         e.preventDefault();
@@ -482,14 +513,41 @@ function ThemeFonts({ page }: { page: Page }) {
 }
 
 export function PageRenderer({ page, ctx }: { page: Page; ctx: RenderCtx }) {
+  const visible = page.sections.filter((s) => ctx.editor || !s.hidden);
+  // Landmarks: the header sits before <main>, the footer after it, everything else inside.
+  const firstBody = visible.findIndex((s) => s.type !== "header");
+  const lastBody = visible.length - 1 - [...visible].reverse().findIndex((s) => s.type !== "footer");
+  const before = firstBody < 0 ? visible : visible.slice(0, firstBody);
+  const body = firstBody < 0 ? [] : visible.slice(firstBody, lastBody + 1);
+  const after = firstBody < 0 ? [] : visible.slice(lastBody + 1);
   return (
     <div className="site" style={themeCss(page.theme)}>
       <ThemeFonts page={page} />
-      {page.sections
-        .filter((s) => ctx.editor || !s.hidden)
-        .map((s) => (
-          <SectionView key={s.id} s={s} ctx={ctx} />
-        ))}
+      {!ctx.editor && (
+        <a className="skip-link" href="#main">
+          Skip to content
+        </a>
+      )}
+      {before.map((s) => (
+        <SectionView key={s.id} s={s} ctx={ctx} />
+      ))}
+      {ctx.editor ? (
+        // Inside Studio the preview already sits in Studio's own <main>; don't nest another.
+        <div>
+          {body.map((s) => (
+            <SectionView key={s.id} s={s} ctx={ctx} />
+          ))}
+        </div>
+      ) : (
+        <main id="main">
+          {body.map((s) => (
+            <SectionView key={s.id} s={s} ctx={ctx} />
+          ))}
+        </main>
+      )}
+      {after.map((s) => (
+        <SectionView key={s.id} s={s} ctx={ctx} />
+      ))}
     </div>
   );
 }
@@ -502,8 +560,11 @@ export function SiteShell({ page, contact, children }: { page: Page; contact?: C
   return (
     <div className="site" style={themeCss(page.theme)}>
       <ThemeFonts page={page} />
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
       {header && <HeaderSection s={header} ctx={ctx} />}
-      <main>{children}</main>
+      <main id="main">{children}</main>
       {footer && <FooterSection s={footer} ctx={ctx} />}
     </div>
   );

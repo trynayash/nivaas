@@ -9,6 +9,8 @@ export interface CmsDoc {
   draft: Page;
   published: Page;
   draftSavedAt: string | null;
+  /** Increments on every draft save/publish. Clients send the one they last saw. */
+  draftRev: number;
   publishedAt: string | null;
   /** Previously published versions, newest first. */
   history: CmsVersion[];
@@ -20,9 +22,18 @@ export interface CmsStorage {
   read(): Promise<CmsDoc>;
   /** Read only the published page (the hot path for public pages). */
   readPublished(): Promise<Page>;
-  saveDraft(page: Page): Promise<{ draftSavedAt: string }>;
-  /** Make `page` live, archiving the previously published version. */
-  publish(page: Page): Promise<{ publishedAt: string }>;
+  /** Save the draft. If `expectedRev` is given and the stored draft has moved on, throws RevisionConflict. */
+  saveDraft(page: Page, expectedRev?: number): Promise<{ draftSavedAt: string; draftRev: number }>;
+  /** Make `page` live, archiving the previously published version. Same revision check. */
+  publish(page: Page, expectedRev?: number): Promise<{ publishedAt: string; draftRev: number }>;
 }
 
 export const MAX_VERSIONS = 15;
+
+/** Someone (another tab, an older request) saved in between. */
+export class RevisionConflict extends Error {
+  code = "REVISION_CONFLICT";
+  constructor(public currentRev: number) {
+    super("This page was changed somewhere else (another tab or device). Reload to get the latest version.");
+  }
+}

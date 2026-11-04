@@ -41,9 +41,13 @@ describe("enquiries", () => {
 });
 
 describe("rateLimit", () => {
-  it("allows the limit then blocks", () => {
+  it("allows the limit then blocks (in-memory, no database)", async () => {
+    const saved = process.env.DATABASE_URL;
+    delete process.env.DATABASE_URL;
     const key = `t-${Math.random()}`;
-    const results = Array.from({ length: 4 }, () => rateLimit(key, 3, 60_000).ok);
+    const results: boolean[] = [];
+    for (let i = 0; i < 4; i++) results.push((await rateLimit(key, 3, 60_000)).ok);
+    if (saved) process.env.DATABASE_URL = saved;
     expect(results).toEqual([true, true, true, false]);
   });
 });

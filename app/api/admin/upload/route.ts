@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { BlobError } from "@vercel/blob";
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { guardAdmin, jsonError, serverError } from "@/lib/admin-api";
 import { IMAGE_TYPES, MAX_UPLOAD_BYTES, uploadMode } from "@/lib/uploads";
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   if (uploadMode() !== "blob") return jsonError("Photo storage is not configured.", 503);
   const body = (await req.json().catch(() => null)) as HandleUploadBody | null;
-  if (!body) return jsonError("Bad request.");
+  if (!body || (body.type !== "blob.generate-client-token" && body.type !== "blob.upload-completed")) return jsonError("Bad request.");
   if (body.type === "blob.generate-client-token") {
     const denied = await guardAdmin(req);
     if (denied) return denied;
@@ -35,12 +36,13 @@ export async function POST(req: Request) {
         if (!UPLOAD_PATH.test(pathname)) throw new Error("Invalid upload path"); // defence in depth
         return { allowedContentTypes: [...IMAGE_TYPES], maximumSizeInBytes: MAX_UPLOAD_BYTES, addRandomSuffix: true };
       },
-      onUploadCompleted: async () => {
-        // The listing stores the URL when the form is saved; nothing to do here.
-      },
+      // No onUploadCompleted: the listing stores the URL when the form is saved, and a callback
+      // would fail on password-protected preview deployments anyway.
     });
     return NextResponse.json(result);
   } catch (err) {
+    // Invalid signatures, wrong paths and the like are the caller's fault, not a server error.
+    if (err instanceof BlobError || (err as Error).message === "Invalid upload path") return jsonError("Upload request rejected.");
     return serverError(err, "blob upload");
   }
 }

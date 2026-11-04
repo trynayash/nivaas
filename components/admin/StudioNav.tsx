@@ -25,6 +25,17 @@ export function StudioNav({ active, newEnquiries }: { active: StudioSection; new
   );
 }
 
+/** End the session on the server, then go to the login page even if the request failed (offline). */
+export async function logout(router: ReturnType<typeof useRouter>) {
+  try {
+    await fetch("/api/admin/logout", { method: "POST" });
+  } catch {
+    /* the cookie is short-lived and the login page works regardless */
+  } finally {
+    router.replace("/admin/login");
+    router.refresh();
+  }
+}
 
 /** Header for Studio pages other than the landing-page editor. */
 export function StudioHeader({ active, newEnquiries, children }: { active: StudioSection; newEnquiries?: number; children?: React.ReactNode }) {
@@ -51,11 +62,7 @@ function LogoutButton() {
     <button
       type="button"
       className="st-btn st-btn-ghost"
-      onClick={async () => {
-        await fetch("/api/admin/logout", { method: "POST" });
-        router.replace("/admin/login");
-        router.refresh();
-      }}
+      onClick={() => logout(router)}
     >
       Log out
     </button>

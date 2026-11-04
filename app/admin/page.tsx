@@ -16,6 +16,7 @@ export default async function AdminPage() {
     <Editor
       initialDraft={doc.draft}
       initialPublished={doc.published}
+      draftRev={doc.draftRev}
       publishedAt={doc.publishedAt}
       history={doc.history}
       ctx={await landingContext()}

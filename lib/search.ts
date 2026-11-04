@@ -1,6 +1,6 @@
 // Search: query parsing, URL <-> filters, filtering, facets, sorting and "close match" suggestions.
 // Pure module — safe to import from both server and client components.
-import { CITIES, FLAT_LOCATIONS, FlatLocation, distanceKm, getCity, norm } from "./locations";
+import { CITIES, FLAT_LOCATIONS, FlatLocation, distanceKm, findLocalityAnywhere, getCity, norm } from "./locations";
 import { CRORE, LAKH, formatPrice } from "./format";
 import { FURNISHINGS, Furnishing, PROPERTY_TYPES, Property, PropertyType, Status } from "./types";
 
@@ -64,6 +64,9 @@ export interface ParsedQuery {
   matchedLocations: FlatLocation[];
 }
 
+/** Highest BHK a listing can have (matches the Studio form). */
+export const MAX_BHK = 10;
+
 const UNIT = "(cr|crore|crores|c|l|lac|lacs|lakh|lakhs|k)";
 const NUM = "(\\d+(?:\\.\\d+)?)";
 
@@ -93,7 +96,9 @@ const STOPWORDS = new Set(
     "in at near around nearby within of for the a an to on with and or & , show me find search looking look buy sale " +
     "property properties home homes house houses residential new resale budget price rs inr best good cheap luxury " +
     // Hinglish
-    "mein mai me ka ki ke wala wali wale chahiye chaiye dikhao batao ghar makaan flat"
+    "mein mai me ka ki ke wala wali wale chahiye chaiye dikhao batao ghar makaan flat " +
+    // price/BHK keywords left behind once their number has been read elsewhere
+    "above over below under max min maximum minimum within upto up than more less starting between km kms"
   ).split(/\s+/)
 );
 
@@ -128,37 +133,31 @@ export function parseQuery(input: string): ParsedQuery {
     .replace(/\b(rs|inr)\.?(?=\s|\d)/g, " ")} `;
   const cut = (m: string) => (s = s.replace(m, " "));
 
-  // --- Price -------------------------------------------------------------
-  const range = new RegExp(`(?:between\\s+)?${NUM}\\s*${UNIT}?\\s*(?:-|to|and)\\s*${NUM}\\s*${UNIT}\\b`).exec(s);
-  if (range) {
-    const hiUnit = range[4];
-    out.minPrice = toRupees(range[1], range[2] ?? hiUnit);
-    out.maxPrice = toRupees(range[3], hiUnit);
-    cut(range[0]);
-  }
-  const max = new RegExp(`\\b(under|below|less than|upto|up to|within|max|maximum|budget|<)\\s*(?:of\\s*)?${NUM}\\s*${UNIT}?\\b`).exec(s);
-  if (max) {
-    out.maxPrice = toRupees(max[2], max[3]);
-    cut(max[0]);
-  }
-  const min = new RegExp(`\\b(above|over|more than|min|minimum|from|starting|>)\\s*(?:at\\s*)?${NUM}\\s*${UNIT}?\\b`).exec(s);
-  if (min) {
-    out.minPrice = toRupees(min[2], min[3]);
-    cut(min[0]);
-  }
+  // --- Compound amounts: "2 crore 50 lakh" → "250 lakh" ------------------
+  s = s.replace(
+    /(\d+(?:\.\d+)?)\s*(?:cr|crore|crores)\s*(?:and\s*)?(\d+(?:\.\d+)?)\s*(?:l|lac|lacs|lakh|lakhs)\b/g,
+    (_m, cr: string, l: string) => ` ${+(parseFloat(cr) * 100 + parseFloat(l)).toFixed(2)} lakh `
+  );
 
-  // --- BHK ---------------------------------------------------------------
-  const multi = /\b(\d)\s*(?:,|\/|or|and|&)\s*(\d)\s*-?\s*bhk\b/.exec(s);
+  // --- BHK first, so its number is never mistaken for a price ("budget 2 bhk") ---
+  const BHK_WORD = "(?:bhk|bhks|bed|beds|bedroom|bedrooms|br)";
+  const span = new RegExp(`\\b(\\d{1,2})\\s*(?:-|to)\\s*(\\d{1,2})\\s*${BHK_WORD}\\b`).exec(s);
+  if (span) {
+    const [a, b] = [+span[1], +span[2]].sort((x, y) => x - y);
+    for (let i = a; i <= b; i++) out.bhk.push(i);
+    cut(span[0]);
+  }
+  const multi = new RegExp(`\\b(\\d{1,2})\\s*(?:,|/|or|and|&)\\s*(\\d{1,2})\\s*-?\\s*${BHK_WORD}\\b`).exec(s);
   if (multi) {
     out.bhk.push(+multi[1], +multi[2]);
     cut(multi[0]);
   }
-  const bhkRe = /\b(\d)\s*(\+)?\s*-?\s*(bhk|bhks|bed|beds|bedroom|bedrooms|br)\b/g;
+  const bhkRe = new RegExp(`\\b(\\d{1,2})\\s*(\\+)?\\s*-?\\s*${BHK_WORD}\\b`, "g");
   let m: RegExpExecArray | null;
   const bhkHits: string[] = [];
   while ((m = bhkRe.exec(s))) {
     const n = +m[1];
-    if (m[2]) for (let i = n; i <= 5; i++) out.bhk.push(i);
+    if (m[2]) for (let i = n; i <= MAX_BHK; i++) out.bhk.push(i);
     else out.bhk.push(n);
     bhkHits.push(m[0]);
   }
@@ -167,7 +166,42 @@ export function parseQuery(input: string): ParsedQuery {
     out.bhk.push(1);
     s = s.replace(/\b(studio|1 ?rk)\b/, " ");
   }
-  out.bhk = [...new Set(out.bhk)].filter((b) => b >= 1 && b <= 5).sort();
+  out.bhk = [...new Set(out.bhk)].filter((b) => b >= 1 && b <= MAX_BHK).sort((a, b) => a - b);
+
+  // --- Price -------------------------------------------------------------
+  // A number followed by a non-price unit ("5 km", "3 floors") is never a budget.
+  const NOT_PRICE = "(?!\\s*(?:km|kms|kilomet|m\\b|min|mins|minutes|floor|floors|sq|sqft|acre|acres|year|years|yr|yrs|%))";
+  const range = new RegExp(`(?:between\\s+|from\\s+)?${NUM}\\s*${UNIT}?\\s*(?:-|to|and)\\s*${NUM}\\s*${UNIT}\\b`).exec(s);
+  if (range) {
+    const hiUnit = range[4];
+    let lo = toRupees(range[1], range[2] ?? hiUnit);
+    // "80 to 1.2 cr": a unit-less low end larger than the high end means lakhs, not crores.
+    if (!range[2] && lo > toRupees(range[3], hiUnit)) lo = toRupees(range[1], "lakh");
+    out.minPrice = lo;
+    out.maxPrice = toRupees(range[3], hiUnit);
+    cut(range[0]);
+  }
+  const max = new RegExp(`(?:^|\\s)(under|below|less than|upto|up to|within|max|maximum|budget|<)\\s*(?:of\\s*)?${NUM}\\s*${UNIT}?\\b${NOT_PRICE}`).exec(s);
+  if (max) {
+    out.maxPrice = toRupees(max[2], max[3]);
+    cut(max[0]);
+  }
+  const min = new RegExp(`(?:^|\\s)(above|over|more than|min|minimum|from|starting|>)\\s*(?:at\\s*)?${NUM}\\s*${UNIT}?\\b${NOT_PRICE}`).exec(s);
+  if (min) {
+    out.minPrice = toRupees(min[2], min[3]);
+    cut(min[0]);
+  }
+  // A plain amount with a unit ("2 bhk 85 lakhs", "1.5cr") is read as the budget.
+  if (out.maxPrice === undefined) {
+    const bare = new RegExp(`(?:^|\\s)${NUM}\\s*(cr|crore|crores|l|lac|lacs|lakh|lakhs)\\b`).exec(s);
+    if (bare) {
+      out.maxPrice = toRupees(bare[1], bare[2]);
+      cut(bare[0]);
+    }
+  }
+  if (out.minPrice !== undefined && out.maxPrice !== undefined && out.minPrice > out.maxPrice) {
+    [out.minPrice, out.maxPrice] = [out.maxPrice, out.minPrice];
+  }
 
   // --- Status / furnishing -----------------------------------------------
   if (/\b(ready to move|ready-to-move|ready|rtm)\b/.test(s)) {
@@ -279,11 +313,16 @@ type SP = Record<string, string | string[] | undefined>;
 const STRUCTURED_KEYS = ["f", "city", "loc", "area", "bhk", "min", "max", "type", "status", "furn", "amin", "amax", "am"];
 
 const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
-const list = (v: string | string[] | undefined) =>
-  (first(v) ?? "")
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
+/** Comma-separated and/or repeated params (?bhk=2&bhk=3), de-duplicated. */
+const list = (v: string | string[] | undefined) => [
+  ...new Set(
+    (Array.isArray(v) ? v : [v ?? ""])
+      .join(",")
+      .split(",")
+      .map((x) => x.trim())
+      .filter(Boolean)
+  ),
+];
 const num = (v: string | string[] | undefined) => {
   const x = first(v);
   if (!x) return undefined;
@@ -328,11 +367,20 @@ export function filtersFromParams(sp: SP): { filters: Filters; parsed?: ParsedQu
   f.city = getCity(first(sp.city)) ? first(sp.city) : undefined;
   f.localities = list(sp.loc);
   f.areas = list(sp.area);
+  // A locality without a city (hand-edited or old link): use the locality's own city.
+  if (!f.city && f.localities.length) f.city = findLocalityAnywhere(f.localities[0])?.city.slug;
+  if (f.city) {
+    const city = getCity(f.city)!;
+    f.localities = f.localities.filter((l) => city.localities.some((x) => x.slug === l));
+    f.areas = f.areas.filter((a) => city.localities.some((l) => l.areas.some((x) => x.slug === a)));
+  }
   f.bhk = list(sp.bhk)
     .map(Number)
-    .filter((n) => n >= 0 && n <= 5);
+    .filter((n) => Number.isInteger(n) && n >= 0 && n <= MAX_BHK)
+    .sort((a, b) => a - b);
   f.minPrice = num(sp.min);
   f.maxPrice = num(sp.max);
+  if (f.minPrice && f.maxPrice && f.minPrice > f.maxPrice) [f.minPrice, f.maxPrice] = [f.maxPrice, f.minPrice];
   f.types = list(sp.type).filter((t): t is PropertyType => (PROPERTY_TYPES as string[]).includes(t));
   const st = first(sp.status);
   f.status = st === "ready" ? "Ready to Move" : st === "uc" ? "Under Construction" : undefined;
@@ -380,9 +428,7 @@ export function queryToParams(q: string): URLSearchParams {
     status: parsed.status,
     furnishing: parsed.furnishing,
   };
-  const p = filtersToParams(f);
-  if (parsed.unmatched) p.set("um", parsed.unmatched);
-  return p;
+  return filtersToParams(f);
 }
 
 // ---------------------------------------------------------------------------
@@ -523,8 +569,10 @@ export function priceLabel(min?: number, max?: number) {
 }
 
 export function describeFilters(f: Filters): string {
-  const bhk = f.bhk.length ? `${f.bhk.filter((b) => b > 0).join(", ")} BHK ` : "";
-  const what = f.types.length ? f.types.map(plural).join(" & ") : f.bhk.length ? "homes" : "Properties";
+  const rooms = f.bhk.filter((b) => b > 0);
+  const plotsOnly = f.bhk.length > 0 && rooms.length === 0;
+  const bhk = rooms.length ? `${rooms.join(", ")} BHK ` : "";
+  const what = f.types.length ? f.types.map(plural).join(" & ") : plotsOnly ? "Plots" : rooms.length ? "homes" : "Properties";
   const where = locationLabel(f);
   const price = priceLabel(f.minPrice, f.maxPrice);
   const text = `${bhk}${what}${where ? ` in ${where}` : ""}${price ? ` ${price}` : ""}`;

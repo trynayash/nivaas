@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MAX_IMAGES } from "@/lib/listings/input";
 import { cx } from "@/lib/format";
 
@@ -57,42 +57,65 @@ async function send(mode: Mode, blob: Blob, folder: string, name: string): Promi
   throw new Error("Photo storage isn’t set up yet. Add a Vercel Blob store to the project.");
 }
 
-export function PhotoUploader({ images, onChange, folder }: { images: string[]; onChange: (next: string[]) => void; folder: string }) {
+export function PhotoUploader({
+  images,
+  onChange,
+  folder,
+  onBusyChange,
+}: {
+  images: string[];
+  onChange: (next: string[]) => void;
+  folder: string;
+  /** Number of uploads still running, so the form can hold saving until they finish. */
+  onBusyChange?: (uploading: number) => void;
+}) {
   const [pending, setPending] = useState<Pending[]>([]);
+  const uploading = pending.filter((p) => !p.error).length;
+  useEffect(() => onBusyChange?.(uploading), [uploading, onBusyChange]);
   const [drag, setDrag] = useState(false);
   const modeRef = useRef<Mode | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // The photo list as of the last change we made, so uploads finishing back to back never
+  // overwrite each other while React hasn't re-rendered yet.
   const latest = useRef(images);
   latest.current = images;
+  const inFlight = useRef(0);
+  const commit = (next: string[]) => {
+    latest.current = next;
+    onChange(next);
+  };
 
   async function addFiles(files: FileList | File[]) {
     const list = Array.from(files);
-    const room = MAX_IMAGES - latest.current.length;
+    const room = MAX_IMAGES - latest.current.length - inFlight.current;
     if (room <= 0) return;
+    inFlight.current += Math.min(room, list.length);
     if (!modeRef.current) {
       const r = await fetch("/api/admin/upload").then((x) => x.json()).catch(() => ({ mode: "none" }));
       modeRef.current = r.mode ?? "none";
     }
-    for (const file of list.slice(0, room)) {
-      const key = `${file.name}-${Math.random()}`;
-      setPending((p) => [...p, { key, name: file.name }]);
+    const batch = list.slice(0, room).map((file) => ({ file, key: `${file.name}-${Math.random()}` }));
+    setPending((p) => [...p, ...batch.map(({ file, key }) => ({ key, name: file.name }))]);
+    for (const { file, key } of batch) {
       try {
         const blob = await prepare(file);
         const url = await send(modeRef.current!, blob, folder, file.name);
-        onChange([...latest.current, url]);
+        if (!latest.current.includes(url)) commit([...latest.current, url]);
         setPending((p) => p.filter((x) => x.key !== key));
       } catch (err) {
-        setPending((p) => p.map((x) => (x.key === key ? { ...x, error: (err as Error).message } : x)));
+        setPending((p) => p.map((x) => (x.key === key ? { ...x, error: (err as Error).message || "Upload failed." } : x)));
+      } finally {
+        inFlight.current -= 1;
       }
     }
   }
 
   const move = (i: number, d: number) => {
-    const next = [...images];
+    const next = [...latest.current];
     const j = i + d;
     if (j < 0 || j >= next.length) return;
     [next[i], next[j]] = [next[j], next[i]];
-    onChange(next);
+    commit(next);
   };
 
   return (
@@ -109,7 +132,7 @@ export function PhotoUploader({ images, onChange, folder }: { images: string[]; 
               <button type="button" onClick={() => move(i, 1)} disabled={i === images.length - 1} aria-label={`Move photo ${i + 1} later`}>
                 →
               </button>
-              <button type="button" onClick={() => onChange(images.filter((_, j) => j !== i))} aria-label={`Remove photo ${i + 1}`}>
+              <button type="button" onClick={() => commit(latest.current.filter((u) => u !== src))} aria-label={`Remove photo ${i + 1}`}>
                 ✕
               </button>
             </div>

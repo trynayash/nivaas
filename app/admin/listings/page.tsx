@@ -137,7 +137,7 @@ export default async function ListingsAdmin({ searchParams }: { searchParams: Pr
                     <div className="st-hint">{formatNumber(p.superBuiltUpArea)} sq.ft</div>
                   </td>
                   <td>
-                    <PublishToggle id={p.id} published={p.published} />
+                    <PublishToggle id={p.id} published={p.published} title={p.title} />
                   </td>
                   <td className="st-table-actions">
                     <Link href={`/admin/listings/${p.id}`} className="st-btn st-btn-small">

@@ -1,5 +1,7 @@
 import "server-only";
+import fs from "node:fs/promises";
 import path from "node:path";
+import { del } from "@vercel/blob";
 
 export const UPLOAD_DIR = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "uploads");
 export const MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
@@ -24,3 +26,18 @@ export function sniffImage(buf: Uint8Array): { ext: string; type: (typeof IMAGE_
 }
 
 export const SAFE_NAME = /^[A-Za-z0-9_-]{6,40}\.(jpg|png|webp)$/;
+
+/**
+ * Best-effort removal of photos that are no longer used by any listing: Blob URLs are deleted
+ * from the store, local uploads from data/uploads. Failures are logged, never thrown.
+ */
+export async function deleteUploads(urls: string[]) {
+  const blob = urls.filter((u) => /^https:\/\/[a-z0-9-]+\.public\.blob\.vercel-storage\.com\//i.test(u));
+  const local = urls.map((u) => u.match(/^\/api\/uploads\/([A-Za-z0-9_-]{6,40}\.(?:jpg|png|webp))$/)?.[1]).filter(Boolean) as string[];
+  try {
+    if (blob.length && process.env.BLOB_READ_WRITE_TOKEN) await del(blob);
+    for (const name of local) await fs.rm(path.join(/* turbopackIgnore: true */ UPLOAD_DIR, name), { force: true });
+  } catch (err) {
+    console.error("[nivaas] could not delete old photos:", (err as Error).message);
+  }
+}

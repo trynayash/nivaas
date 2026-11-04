@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { api } from "@/lib/client-api";
 
 /** Publish / unpublish toggle in the listings table. */
-export function PublishToggle({ id, published }: { id: string; published: boolean }) {
+export function PublishToggle({ id, published, title }: { id: string; published: boolean; title: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [on, setOn] = useState(published);
@@ -14,16 +15,16 @@ export function PublishToggle({ id, published }: { id: string; published: boolea
         type="checkbox"
         checked={on}
         disabled={busy}
-        aria-label={on ? "Unpublish listing" : "Publish listing"}
+        aria-label={`Live on the website: ${title}`}
         onChange={async (e) => {
           const next = e.target.checked;
           setBusy(true);
           setOn(next);
-          const res = await fetch(`/api/admin/listings/${id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ published: next }) });
+          const r = await api(`/api/admin/listings/${id}`, { method: "PATCH", body: { published: next } });
           setBusy(false);
-          if (!res.ok) {
+          if (!r.ok) {
             setOn(!next);
-            alert((await res.json().catch(() => ({}))).error ?? "Couldn’t change this listing.");
+            alert(r.error);
           } else router.refresh();
         }}
       />
@@ -45,10 +46,10 @@ export function RemoveSamplesButton({ count }: { count: number }) {
       onClick={async () => {
         if (!window.confirm(`Delete all ${count} sample listings? Your own listings are kept. Samples won’t come back.`)) return;
         setBusy(true);
-        const res = await fetch("/api/admin/listings/remove-samples", { method: "POST" });
+        const r = await api("/api/admin/listings/remove-samples", { method: "POST" });
         setBusy(false);
-        if (res.ok) router.refresh();
-        else alert((await res.json().catch(() => ({}))).error ?? "Couldn’t remove the samples.");
+        if (r.ok) router.refresh();
+        else alert(r.error);
       }}
     >
       {busy ? "Removing…" : `Remove ${count} sample listings`}

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { FACINGS, OWNERSHIPS, STATUSES, type ListingInput, typeLabel, validateListing } from "@/lib/listings/input";
 import { CITIES, getCity } from "@/lib/locations";
 import { cx, formatPrice } from "@/lib/format";
 import { AMENITY_GROUPS, FURNISHINGS, PROPERTY_TYPES } from "@/lib/types";
+import { api } from "@/lib/client-api";
 import { PhotoUploader } from "./PhotoUploader";
 
 type Errors = Record<string, string>;
@@ -32,31 +33,55 @@ function F({ label, name, errors, hint, children, wide }: { label: string; name:
 const asText = (v: unknown) => (v === undefined || v === null ? "" : String(v));
 const listText = (v: string[] | undefined) => (v ?? []).join("\n");
 const fromLines = (s: string) => s.split("\n");
-const fromCommas = (s: string) => s.split(",");
+const fromCommas = (s: string) => s.split(",").map((x) => x.trim()).filter(Boolean);
+
+/** A comma-separated list field. Keeps what's typed (trailing commas, spaces) and reports the parsed list. */
+function CommaInput({ id, value, onChange }: { id: string; value: string[]; onChange: (list: string[]) => void }) {
+  const [raw, setRaw] = useState(() => value.join(", "));
+  return (
+    <input
+      id={id}
+      className="st-input"
+      value={raw}
+      onChange={(e) => {
+        setRaw(e.target.value);
+        onChange(fromCommas(e.target.value));
+      }}
+      onBlur={() => setRaw(value.join(", "))}
+    />
+  );
+}
 
 export function ListingForm({
   initial,
   id,
   slug,
   isSample,
+  rev,
 }: {
   initial: ListingInput;
   id?: string;
   slug?: string;
   isSample?: boolean;
+  /** The stored revision this form was loaded from; a save from a stale form is refused. */
+  rev?: number;
 }) {
   const router = useRouter();
   const [v, setV] = useState<ListingInput>(initial);
   const [errors, setErrors] = useState<Errors>({});
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(0);
   const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
-  const [dirty, setDirty] = useState(false);
+  // Unsaved = differs from what the server last confirmed (edits made while a save runs stay unsaved).
+  const [savedJson, setSavedJson] = useState(() => JSON.stringify(initial));
+  const dirty = useMemo(() => JSON.stringify(v) !== savedJson, [v, savedJson]);
+  const revRef = useRef(rev);
   const folder = useRef(id ?? `new-${Math.random().toString(36).slice(2, 8)}`).current;
+  const onBusyChange = useCallback((n: number) => setUploading(n), []);
 
   const set = <K extends keyof ListingInput>(k: K, val: ListingInput[K]) => {
     setV((s) => ({ ...s, [k]: val }));
-    setDirty(true);
-    if (errors[k as string]) setErrors((e) => ({ ...e, [k as string]: "" }));
+    setErrors((e) => (e[k as string] ? { ...e, [k as string]: "" } : e));
   };
 
   useEffect(() => {
@@ -77,56 +102,63 @@ export function ListingForm({
   }, [v.type, v.bhk, v.area, locality]);
 
   async function save(publish?: boolean) {
+    if (uploading) {
+      setMessage({ kind: "error", text: "Wait for the photos to finish uploading, then save." });
+      return;
+    }
     const body = publish === undefined ? v : { ...v, published: publish };
     const check = validateListing(body);
     if (!check.ok) {
       setErrors(check.errors);
-      setMessage({ kind: "error", text: `${Object.keys(check.errors).length} field${Object.keys(check.errors).length > 1 ? "s need" : " needs"} attention.` });
-      requestAnimationFrame(() => document.querySelector(".lf-field.has-error")?.scrollIntoView({ behavior: "smooth", block: "center" }));
+      const n = Object.keys(check.errors).length;
+      setMessage({ kind: "error", text: `${n} field${n > 1 ? "s need" : " needs"} attention.` });
+      requestAnimationFrame(() => {
+        const field = document.querySelector<HTMLElement>(".lf-field.has-error");
+        field?.scrollIntoView({ behavior: "smooth", block: "center" });
+        field?.querySelector<HTMLElement>("input, select, textarea")?.focus({ preventScroll: true });
+      });
       return;
     }
     setSaving(true);
     setMessage(null);
     try {
-      const res = await fetch(id ? `/api/admin/listings/${id}` : "/api/admin/listings", {
+      const sent = JSON.stringify(body);
+      const r = await api<{ listing: { id: string; published: boolean; rev?: number } }>(id ? `/api/admin/listings/${id}` : "/api/admin/listings", {
         method: id ? "PUT" : "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: { ...body, rev: revRef.current },
       });
-      const data = await res.json().catch(() => ({}));
-      if (res.status === 401) {
-        setMessage({ kind: "error", text: "Your session expired. Open Studio in a new tab, sign in, then save again." });
+      if (!r.ok) {
+        if (r.data.fields) setErrors(r.data.fields as Errors);
+        setMessage({ kind: "error", text: r.error });
         return;
       }
-      if (!res.ok) {
-        if (data.fields) setErrors(data.fields);
-        setMessage({ kind: "error", text: data.error ?? "Couldn’t save. Please try again." });
-        return;
-      }
-      setDirty(false);
-      setV((s) => ({ ...s, published: data.listing.published }));
+      const listing = r.data.listing;
+      revRef.current = listing.rev;
+      setSavedJson(sent);
+      setV((s) => ({ ...s, published: listing.published }));
       if (!id) {
-        router.replace(`/admin/listings/${data.listing.id}?saved=1`);
+        router.replace(`/admin/listings/${listing.id}?saved=1`);
         return;
       }
-      setMessage({ kind: "ok", text: data.listing.published ? "Saved. The listing is live." : "Saved as a draft. Visitors can’t see it yet." });
+      setMessage({ kind: "ok", text: listing.published ? "Saved. The listing is live." : "Saved as a draft. Visitors can’t see it yet." });
       router.refresh();
-    } catch {
-      setMessage({ kind: "error", text: "Network error — check your connection and save again." });
     } finally {
       setSaving(false);
     }
   }
 
   async function remove() {
-    if (!id || !window.confirm("Delete this listing permanently? This can’t be undone.")) return;
+    if (!id || !window.confirm("Delete this listing permanently? Its photos are deleted too. This can’t be undone.")) return;
     setSaving(true);
-    const res = await fetch(`/api/admin/listings/${id}`, { method: "DELETE" });
-    setSaving(false);
-    if (res.ok) {
-      setDirty(false);
-      router.replace("/admin/listings?deleted=1");
-    } else setMessage({ kind: "error", text: (await res.json().catch(() => ({}))).error ?? "Couldn’t delete." });
+    try {
+      const r = await api(`/api/admin/listings/${id}`, { method: "DELETE" });
+      if (r.ok) {
+        setSavedJson(JSON.stringify(v)); // nothing left to lose: don't warn on the way out
+        router.replace("/admin/listings?deleted=1");
+      } else setMessage({ kind: "error", text: r.error });
+    } finally {
+      setSaving(false);
+    }
   }
 
   const input = (name: keyof ListingInput, props: React.InputHTMLAttributes<HTMLInputElement> = {}) => (
@@ -181,7 +213,7 @@ export function ListingForm({
 
       <section className="lf-sec">
         <h2>Photos</h2>
-        <PhotoUploader images={(v.images ?? []) as string[]} folder={folder} onChange={(imgs) => set("images", imgs)} />
+        <PhotoUploader images={(v.images ?? []) as string[]} folder={folder} onChange={(imgs) => set("images", imgs)} onBusyChange={onBusyChange} />
         {errors.images && <p className="lf-error">{errors.images}</p>}
       </section>
 
@@ -229,13 +261,11 @@ export function ListingForm({
           <F label="City" name="city" errors={errors}>
             {select("city", CITIES.map((c) => ({ value: c.slug, label: c.name })), (c) => {
               setV((s) => ({ ...s, city: c, locality: "", area: "" }));
-              setDirty(true);
             })}
           </F>
           <F label="Locality" name="locality" errors={errors}>
             {select("locality", [{ value: "", label: "Choose…" }, ...(city?.localities ?? []).map((l) => ({ value: l.slug, label: l.name }))], (l) => {
               setV((s) => ({ ...s, locality: l, area: "" }));
-              setDirty(true);
               setErrors((e) => ({ ...e, locality: "" }));
             })}
           </F>
@@ -384,10 +414,10 @@ export function ListingForm({
             {input("waterSupply", { maxLength: 80, placeholder: "e.g. 24 hrs · Municipal + borewell" })}
           </F>
           <F label="Overlooking" name="overlooking" errors={errors} hint="Comma-separated, e.g. Sea, Garden">
-            <input id="f-overlooking" className="st-input" value={((v.overlooking ?? []) as string[]).join(", ")} onChange={(e) => set("overlooking", fromCommas(e.target.value))} />
+            <CommaInput id="f-overlooking" value={(v.overlooking ?? []) as string[]} onChange={(list) => set("overlooking", list)} />
           </F>
           <F label="Approved banks" name="approvedBanks" errors={errors} hint="Comma-separated" wide>
-            <input id="f-approvedBanks" className="st-input" value={((v.approvedBanks ?? []) as string[]).join(", ")} onChange={(e) => set("approvedBanks", fromCommas(e.target.value))} />
+            <CommaInput id="f-approvedBanks" value={(v.approvedBanks ?? []) as string[]} onChange={(list) => set("approvedBanks", list)} />
           </F>
         </div>
         {check("gatedCommunity", "Gated community")}
@@ -459,7 +489,7 @@ export function ListingForm({
               {message.text}
             </span>
           ) : (
-            <span className="st-hint">{dirty ? "Unsaved changes" : v.published ? "Live on the website" : "Draft — not visible to visitors"}</span>
+            <span className="st-hint">{uploading ? `Uploading ${uploading} photo${uploading > 1 ? "s" : ""}…` : dirty ? "Unsaved changes" : v.published ? "Live on the website" : "Draft — not visible to visitors"}</span>
           )}
         </div>
         <div className="lf-bar-actions">

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { guardAdmin, jsonError, serverError } from "@/lib/admin-api";
 import { toProperty, validateListing } from "@/lib/listings/input";
-import { SlugTakenError, writableListingStore } from "@/lib/listings/store";
+import { SlugTakenError, StaleListingError, writableListingStore } from "@/lib/listings/store";
+import { deleteUploads } from "@/lib/uploads";
+import { ID_RE, readJson } from "@/lib/sanitize";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -11,18 +13,21 @@ export async function PUT(req: Request, { params }: Ctx) {
   const denied = await guardAdmin(req);
   if (denied) return denied;
   const { id } = await params;
+  if (!ID_RE.test(id)) return jsonError("This listing no longer exists.", 404);
   try {
     const store = writableListingStore();
     const existing = await store.get(id);
     if (!existing) return jsonError("This listing no longer exists.", 404);
-    const body = await req.json().catch(() => null);
+    const body = (await readJson(req)) as { rev?: unknown } | null;
     const v = validateListing(body ?? {});
     if (!v.ok) return jsonError("Some fields need attention.", 422, { fields: v.errors });
-    const saved = await store.save(toProperty(v.data, { id, existing }));
+    const saved = await store.save(toProperty(v.data, { id, existing }), typeof body?.rev === "number" ? body.rev : undefined);
+    // Photos removed from the listing are deleted from storage.
+    await deleteUploads(existing.images.filter((u) => !saved.images.includes(u)));
     revalidatePath("/", "layout");
     return NextResponse.json({ listing: saved });
   } catch (err) {
-    if (err instanceof SlugTakenError) return jsonError(err.message, 409);
+    if (err instanceof SlugTakenError || err instanceof StaleListingError) return jsonError(err.message, 409);
     return serverError(err, "update listing");
   }
 }
@@ -32,7 +37,8 @@ export async function PATCH(req: Request, { params }: Ctx) {
   const denied = await guardAdmin(req);
   if (denied) return denied;
   const { id } = await params;
-  const body = (await req.json().catch(() => null)) as { published?: unknown; featured?: unknown } | null;
+  if (!ID_RE.test(id)) return jsonError("This listing no longer exists.", 404);
+  const body = (await readJson(req)) as { published?: unknown; featured?: unknown } | null;
   if (!body || (typeof body.published !== "boolean" && typeof body.featured !== "boolean")) return jsonError("Nothing to change.");
   try {
     const store = writableListingStore();
@@ -54,9 +60,12 @@ export async function DELETE(req: Request, { params }: Ctx) {
   const denied = await guardAdmin(req);
   if (denied) return denied;
   const { id } = await params;
+  if (!ID_RE.test(id)) return jsonError("This listing no longer exists.", 404);
   try {
-    const removed = await writableListingStore().remove(id);
-    if (!removed) return jsonError("This listing no longer exists.", 404);
+    const store = writableListingStore();
+    const existing = await store.get(id);
+    if (!existing || !(await store.remove(id))) return jsonError("This listing no longer exists.", 404);
+    await deleteUploads(existing.images);
     revalidatePath("/", "layout");
     return NextResponse.json({ ok: true });
   } catch (err) {

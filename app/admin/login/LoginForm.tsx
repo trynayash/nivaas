@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { api } from "@/lib/client-api";
 
 export function LoginForm() {
   const [error, setError] = useState("");
@@ -14,16 +15,14 @@ export function LoginForm() {
         setBusy(true);
         setError("");
         const password = String(new FormData(e.currentTarget).get("password") ?? "");
-        const res = await fetch("/api/admin/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password }) });
-        if (res.ok) {
+        const r = await api("/api/admin/login", { method: "POST", body: { password } });
+        if (r.ok) {
           router.replace("/admin");
           router.refresh();
+          return; // keep the button busy while Studio loads
         }
-        else {
-          const data = await res.json().catch(() => ({}));
-          setError(res.status === 429 ? data.error : "That password didn’t work.");
-          setBusy(false);
-        }
+        setError(r.status === 401 ? "That password didn’t work." : r.error);
+        setBusy(false);
       }}
     >
       <label>

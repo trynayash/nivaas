@@ -26,7 +26,9 @@ export type NewEnquiry = Pick<Enquiry, "propertyId" | "propertyTitle" | "propert
 
 export interface EnquiryStore {
   create(e: NewEnquiry): Promise<Enquiry>;
-  list(opts?: { status?: EnquiryStatus }): Promise<Enquiry[]>;
+  /** Newest first. Without `limit`, returns everything (used by the CSV export). */
+  list(opts?: { status?: EnquiryStatus; limit?: number; offset?: number }): Promise<Enquiry[]>;
+  counts(): Promise<Record<EnquiryStatus | "all", number>>;
   update(id: string, patch: { status?: EnquiryStatus; note?: string }): Promise<Enquiry | undefined>;
   countNew(): Promise<number>;
 }
@@ -54,10 +56,21 @@ const postgresStore: EnquiryStore = {
     }),
   list: (opts = {}) =>
     withSchema(async () => {
-      const { rows } = opts.status
-        ? await pool().query<Row>(`select * from enquiries where status = $1 order by created_at desc limit 1000`, [opts.status])
-        : await pool().query<Row>(`select * from enquiries order by created_at desc limit 1000`);
+      const { rows } = await pool().query<Row>(
+        `select * from enquiries where ($1::text is null or status = $1) order by created_at desc, id limit $2 offset $3`,
+        [opts.status ?? null, opts.limit ?? null, opts.offset ?? 0]
+      );
       return rows.map(fromRow);
+    }),
+  counts: () =>
+    withSchema(async () => {
+      const { rows } = await pool().query<{ status: EnquiryStatus; n: string }>(`select status, count(*) as n from enquiries group by status`);
+      const out = { all: 0, new: 0, contacted: 0, closed: 0 };
+      for (const r of rows) {
+        out[r.status] = Number(r.n);
+        out.all += Number(r.n);
+      }
+      return out;
     }),
   update: (id, patch) =>
     withSchema(async () => {
@@ -101,7 +114,17 @@ const jsonStore: EnquiryStore = {
       await save([row, ...(await load())]);
       return row;
     }),
-  list: async (opts = {}) => (await load()).filter((e) => !opts.status || e.status === opts.status),
+  list: async (opts = {}) => {
+    const rows = (await load()).filter((e) => !opts.status || e.status === opts.status);
+    const start = opts.offset ?? 0;
+    return opts.limit === undefined ? rows.slice(start) : rows.slice(start, start + opts.limit);
+  },
+  counts: async () => {
+    const rows = await load();
+    const out = { all: rows.length, new: 0, contacted: 0, closed: 0 };
+    for (const r of rows) out[r.status]++;
+    return out;
+  },
   update: (id, patch) =>
     serial(async () => {
       const list = await load();
