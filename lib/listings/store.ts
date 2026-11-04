@@ -1,7 +1,7 @@
 import "server-only";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { assertWritableFallback, hasDatabase, iso, pool, tx, withSchema } from "@/lib/db";
+import { assertWritableFallback, hasDatabase, iso, onSchemaReset, pool, tx, withSchema } from "@/lib/db";
 import { generateProperties } from "@/lib/seed";
 import type { Property } from "@/lib/types";
 
@@ -35,6 +35,9 @@ const byNewest = (a: Property, b: Property) =>
 // ---------------------------------------------------------------------------
 
 const g = globalThis as unknown as { __nivaasSeeded?: Promise<void> };
+onSchemaReset(() => {
+  g.__nivaasSeeded = undefined; // tables were recreated, so check the seed marker again
+});
 
 /**
  * Insert the sample inventory exactly once per database. A marker in app_meta records that it

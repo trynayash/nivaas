@@ -1,10 +1,12 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export function LoginForm() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
   return (
     <form
       onSubmit={async (e) => {
@@ -13,9 +15,13 @@ export function LoginForm() {
         setError("");
         const password = String(new FormData(e.currentTarget).get("password") ?? "");
         const res = await fetch("/api/admin/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password }) });
-        if (res.ok) window.location.href = "/admin";
+        if (res.ok) {
+          router.replace("/admin");
+          router.refresh();
+        }
         else {
-          setError("That password didn’t work.");
+          const data = await res.json().catch(() => ({}));
+          setError(res.status === 429 ? data.error : "That password didn’t work.");
           setBusy(false);
         }
       }}

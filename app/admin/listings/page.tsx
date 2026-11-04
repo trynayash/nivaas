@@ -42,7 +42,10 @@ export default async function ListingsAdmin({ searchParams }: { searchParams: Pr
   const rows = filtered.slice((Math.min(page, pages) - 1) * PAGE, Math.min(page, pages) * PAGE);
   const qs = (patch: Record<string, string | number>) => {
     const p = new URLSearchParams({ ...(q && { q }), ...(city && { city }), ...(show !== "all" && { show }) });
-    for (const [k, val] of Object.entries(patch)) val ? p.set(k, String(val)) : p.delete(k);
+    for (const [k, val] of Object.entries(patch)) {
+      if (val) p.set(k, String(val));
+      else p.delete(k);
+    }
     return `/admin/listings?${p.toString()}`;
   };
 

@@ -26,7 +26,8 @@ export default async function EnquiriesAdmin({ searchParams }: { searchParams: P
       <link rel="stylesheet" href={STUDIO_FONTS_HREF} precedence="default" />
       <StudioHeader active="enquiries" newEnquiries={counts.new}>
         {all.length > 0 && (
-          <a className="st-btn" href="/api/admin/enquiries/export">
+          // A file download from an API route, so a plain <a download> rather than <Link>.
+          <a className="st-btn" href="/api/admin/enquiries/export" download>
             Download CSV
           </a>
         )}

@@ -1046,3 +1046,4 @@ a.pcard:hover .pc-title { text-decoration: underline; text-underline-offset: 3px
 .price-box > .text-link { font-size: 14px; align-self: flex-start; }
 /* The aside now holds price + enquiry form — taller than a laptop screen, so it must not be sticky. */
 .detail-aside { position: static; }
+.ed-empty-note { padding: 18px; border: 1px dashed var(--rule-strong); border-radius: var(--radius); }

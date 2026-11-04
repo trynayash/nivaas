@@ -209,7 +209,8 @@ export function HeaderSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
 
 function HeroSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   const minH = Number(s.settings.minHeight) || 0;
-  const showIndex = !!s.settings.showIndex && Object.keys(ctx.cityCounts).length > 0;
+  // Hide the index until there is something to count (e.g. after removing the sample listings).
+  const showIndex = !!s.settings.showIndex && Object.values(ctx.cityCounts).some((n) => n > 0);
   return (
     <Shell
       s={s}
@@ -310,6 +311,16 @@ function FeaturedSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   const list = pickListings(ctx, String(s.settings.source || "featured"), Number(s.settings.count) || 6);
   const source = String(s.settings.source || "");
   const href = source.startsWith("city:") ? `/search?city=${source.slice(5)}&f=1` : source === "newest" ? "/search?sort=newest&f=1" : "/search";
+  if (!list.length) {
+    // Nothing to show: hide the section for visitors, explain it in the editor.
+    if (!ctx.editor) return null;
+    return (
+      <Shell s={s} ctx={ctx}>
+        <SectionHead s={s} ctx={ctx} />
+        <p className="sec-muted ed-empty-note">No published listings match this section yet, so visitors won’t see it. It appears automatically once listings are published.</p>
+      </Shell>
+    );
+  }
   return (
     <Shell s={s} ctx={ctx}>
       <SectionHead
@@ -344,7 +355,7 @@ function LocationsSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
             <div key={i} className="loc-col">
               <Link href={`/search?city=${it.slug}&f=1`} className="loc-col-head">
                 <I s={s} idx={i} field="city" ctx={ctx} className="loc-city" />
-                {s.settings.showCounts && <span className="num sec-muted">{count}</span>}
+                {s.settings.showCounts && count > 0 && <span className="num sec-muted">{count}</span>}
               </Link>
               <I s={s} idx={i} field="caption" ctx={ctx} className="loc-caption sec-muted" />
               {locs.length > 0 && (

@@ -93,8 +93,11 @@ export function SearchBar({
           placeholder={placeholder}
           autoComplete="off"
           aria-label="Search properties by city, locality, configuration or budget"
+          role="combobox"
           aria-autocomplete="list"
+          aria-controls="sb-suggestions"
           aria-expanded={open && items.length > 0}
+          aria-activedescendant={open && active >= 0 ? `sb-opt-${active}` : undefined}
           onChange={(e) => {
             setQ(e.target.value);
             setOpen(true);
@@ -118,10 +121,11 @@ export function SearchBar({
           Search
         </button>
         {open && items.length > 0 && !inert && (
-          <ul className="sb-suggest" role="listbox">
+          <ul className="sb-suggest" role="listbox" id="sb-suggestions">
             {items.map((l, i) => (
               <li
                 key={l.label}
+                id={`sb-opt-${i}`}
                 role="option"
                 aria-selected={i === active}
                 className={cx(i === active && "is-active")}

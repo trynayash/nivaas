@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { cx } from "@/lib/format";
 
 export type StudioSection = "page" | "listings" | "enquiries";
@@ -24,10 +25,6 @@ export function StudioNav({ active, newEnquiries }: { active: StudioSection; new
   );
 }
 
-export async function logout() {
-  await fetch("/api/admin/logout", { method: "POST" });
-  window.location.href = "/admin/login";
-}
 
 /** Header for Studio pages other than the landing-page editor. */
 export function StudioHeader({ active, newEnquiries, children }: { active: StudioSection; newEnquiries?: number; children?: React.ReactNode }) {
@@ -42,10 +39,25 @@ export function StudioHeader({ active, newEnquiries, children }: { active: Studi
         <a className="st-btn st-btn-ghost" href="/" target="_blank" rel="noreferrer">
           Open site ↗
         </a>
-        <button type="button" className="st-btn st-btn-ghost" onClick={logout}>
-          Log out
-        </button>
+        <LogoutButton />
       </div>
     </header>
+  );
+}
+
+function LogoutButton() {
+  const router = useRouter();
+  return (
+    <button
+      type="button"
+      className="st-btn st-btn-ghost"
+      onClick={async () => {
+        await fetch("/api/admin/logout", { method: "POST" });
+        router.replace("/admin/login");
+        router.refresh();
+      }}
+    >
+      Log out
+    </button>
   );
 }

@@ -37,7 +37,6 @@ export function PropertyArt({
   plotArea?: number;
 }) {
   if (images && images.length) {
-    // eslint-disable-next-line @next/next/no-img-element
     return <img src={images[0]} alt={label ?? ""} className={className} style={{ objectFit: "cover", width: "100%", height: "100%" }} />;
   }
   const r = rng(id);

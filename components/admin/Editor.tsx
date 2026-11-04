@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorBridge, PageRenderer, RenderCtx } from "@/components/cms/PageRenderer";
 import { Page, SECTION_DEFS, STUDIO_FONTS_HREF, Section, SectionType, Theme, createSection, uid } from "@/lib/cms/schema";
@@ -29,7 +30,10 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
   const past = useRef<Page[]>([]);
   const future = useRef<Page[]>([]);
   const lastKey = useRef<{ key: string; t: number } | null>(null);
-  const [, force] = useState(0);
+  // Undo/redo availability lives in state so the buttons re-render correctly (refs are not render data).
+  const [hist, setHist] = useState({ past: 0, future: 0 });
+  const router = useRouter();
+  const syncHist = () => setHist({ past: past.current.length, future: future.current.length });
 
   const [publishedJson, setPublishedJson] = useState(() => JSON.stringify(initialPublished));
   const [publishedAt, setPublishedAt] = useState(initialPublishedAt);
@@ -58,6 +62,7 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
       if (past.current.length > 150) past.current.shift();
     }
     future.current = [];
+    syncHist();
     lastKey.current = key ? { key, t: now } : null;
     pageRef.current = next;
     setPage(next);
@@ -81,7 +86,7 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
     lastKey.current = null;
     setPage(prev);
     setDirty(true);
-    force((x) => x + 1);
+    syncHist();
   }, []);
 
   const redo = useCallback(() => {
@@ -92,7 +97,7 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
     lastKey.current = null;
     setPage(next);
     setDirty(true);
-    force((x) => x + 1);
+    syncHist();
   }, []);
 
   const updateSection = useCallback(
@@ -114,7 +119,7 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
     try {
       const res = await fetch("/api/cms", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ page: pageRef.current }) });
       if (res.status === 401) {
-        window.location.href = "/admin/login";
+        router.push("/admin/login");
         return false;
       }
       if (!res.ok) throw new Error();
@@ -125,7 +130,7 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
       setSave("error");
       return false;
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     if (!dirty) return;
@@ -308,10 +313,10 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
 
         <div className="st-top-actions">
           <div className="st-undo">
-            <button type="button" onClick={undo} disabled={!past.current.length} title="Undo (Ctrl+Z)" aria-label="Undo">
+            <button type="button" onClick={undo} disabled={!hist.past} title="Undo (Ctrl+Z)" aria-label="Undo">
               ↶
             </button>
-            <button type="button" onClick={redo} disabled={!future.current.length} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
+            <button type="button" onClick={redo} disabled={!hist.future} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">
               ↷
             </button>
           </div>
@@ -482,7 +487,8 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
             className="text-link"
             onClick={async () => {
               await fetch("/api/admin/logout", { method: "POST" });
-              window.location.href = "/admin/login";
+              router.replace("/admin/login");
+              router.refresh();
             }}
           >
             Log out

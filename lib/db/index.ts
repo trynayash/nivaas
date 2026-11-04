@@ -29,6 +29,13 @@ export function pool(): Pool {
   return g.__nivaasPool;
 }
 
+// Per-process caches that depend on the tables (e.g. "samples already seeded") register here so
+// they are cleared when the schema has to be recreated.
+const resetHooks = new Set<() => void>();
+export function onSchemaReset(fn: () => void) {
+  resetHooks.add(fn);
+}
+
 function ensureSchema(): Promise<void> {
   if (!g.__nivaasSchema) {
     g.__nivaasSchema = pool()
@@ -53,6 +60,7 @@ export async function withSchema<T>(fn: () => Promise<T>): Promise<T> {
   } catch (err) {
     if ((err as { code?: string }).code !== "42P01") throw err;
     g.__nivaasSchema = undefined;
+    for (const fn of resetHooks) fn();
     await ensureSchema();
     return fn();
   }

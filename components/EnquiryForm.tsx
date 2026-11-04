@@ -1,12 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type Errors = Record<string, string>;
 
 /** "Request a call back" form on the property page. Saves to the Studio enquiry inbox. */
 export function EnquiryForm({ propertyId, title, whatsappHref }: { propertyId: string; title: string; whatsappHref?: string }) {
-  const opened = useRef(Date.now());
+  // When the form was first shown (set after mount — reading the clock during render isn't pure).
+  const opened = useRef(0);
+  useEffect(() => {
+    opened.current = Date.now();
+  }, []);
   const [state, setState] = useState<"idle" | "sending" | "sent">("idle");
   const [errors, setErrors] = useState<Errors>({});
   const [sentPhone, setSentPhone] = useState("");

@@ -19,7 +19,6 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
       }}
     >
       <div className="gallery-main">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={images[i]} alt={`${title} — photo ${i + 1} of ${images.length}`} />
         {images.length > 1 && (
           <>
@@ -40,7 +39,6 @@ export function Gallery({ images, title }: { images: string[]; title: string }) 
           {images.map((src, j) => (
             <li key={src}>
               <button type="button" className={cx(j === i && "is-on")} onClick={() => setI(j)} aria-label={`Show photo ${j + 1}`} aria-current={j === i || undefined}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={src} alt="" loading="lazy" />
               </button>
             </li>

@@ -100,7 +100,6 @@ export function PhotoUploader({ images, onChange, folder }: { images: string[]; 
       <ol className="lf-thumbs">
         {images.map((src, i) => (
           <li key={src} className="lf-thumb">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={src} alt={`Photo ${i + 1}`} />
             {i === 0 && <span className="lf-cover">Cover</span>}
             <div className="lf-thumb-actions">
