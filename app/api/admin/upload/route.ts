@@ -3,6 +3,8 @@ import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { guardAdmin, jsonError, serverError } from "@/lib/admin-api";
 import { IMAGE_TYPES, MAX_UPLOAD_BYTES, uploadMode } from "@/lib/uploads";
 
+const UPLOAD_PATH = /^listings\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/;
+
 /** Which upload path the browser should use. */
 export async function GET(req: Request) {
   const denied = await guardAdmin(req);
@@ -22,13 +24,15 @@ export async function POST(req: Request) {
   if (body.type === "blob.generate-client-token") {
     const denied = await guardAdmin(req);
     if (denied) return denied;
+    // A malformed path is the client's mistake: answer 400 instead of logging a server error.
+    if (!UPLOAD_PATH.test(body.payload?.pathname ?? "")) return jsonError("Invalid upload path.");
   }
   try {
     const result = await handleUpload({
       body,
       request: req,
       onBeforeGenerateToken: async (pathname) => {
-        if (!/^listings\/[A-Za-z0-9_-]+\/[A-Za-z0-9._-]+$/.test(pathname)) throw new Error("Invalid upload path");
+        if (!UPLOAD_PATH.test(pathname)) throw new Error("Invalid upload path"); // defence in depth
         return { allowedContentTypes: [...IMAGE_TYPES], maximumSizeInBytes: MAX_UPLOAD_BYTES, addRandomSuffix: true };
       },
       onUploadCompleted: async () => {
