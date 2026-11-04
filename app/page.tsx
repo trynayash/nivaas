@@ -20,7 +20,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
           <Link href="/admin">Back to editor</Link>
         </div>
       )}
-      <PageRenderer page={page} ctx={{ ...landingContext(), contact: { whatsapp: whatsappFromEnv(), message: DEFAULT_CONTACT_MESSAGE } }} />
+      <PageRenderer page={page} ctx={{ ...(await landingContext()), contact: { whatsapp: whatsappFromEnv(), message: DEFAULT_CONTACT_MESSAGE } }} />
     </>
   );
 }

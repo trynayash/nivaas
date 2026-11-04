@@ -297,6 +297,7 @@ function makeProperty(city: CityNode, loc: LocalityNode, overrides: Partial<{ ty
     featured: false,
     hue: pick(HUES),
     isSample: true,
+    published: true,
   };
 }
 

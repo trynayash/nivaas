@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Pool } from "pg";
-import { SCHEMA_SQL } from "../lib/cms/storage/sql";
+import { SCHEMA_SQL } from "../lib/db/schema";
 import { defaultPage } from "../lib/cms/schema";
 
 async function main() {

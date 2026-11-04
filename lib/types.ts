@@ -74,6 +74,10 @@ export interface Property {
   hue: number;
   /** Demo inventory: shown with a "Sample listing" tag and never linked to official registries. */
   isSample: boolean;
+  /** Visible on the public site. Drafts are only visible in Studio. */
+  published: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /** Light shape sent to client components & cards. */

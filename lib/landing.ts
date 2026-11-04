@@ -10,12 +10,12 @@ export interface LocalityCount {
 }
 
 /** Data the CMS sections need: listings for every "featured" source, plus live city and locality counts. */
-export function landingContext(): {
+export async function landingContext(): Promise<{
   properties: PropertySummary[];
   cityCounts: Record<string, number>;
   localities: Record<string, LocalityCount[]>;
-} {
-  const all = getAllProperties();
+}> {
+  const all = await getAllProperties();
   const pool = new Map<string, PropertySummary>();
   const add = (list: typeof all) => list.slice(0, 12).forEach((p) => pool.set(p.id, toSummary(p)));
   add(all.filter((p) => p.featured));

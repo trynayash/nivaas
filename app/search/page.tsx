@@ -44,7 +44,7 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
   const sp = await searchParams;
   const { filters, parsed } = filtersFromParams(sp);
   const unmatched = (typeof sp.um === "string" ? sp.um : undefined) ?? parsed?.unmatched;
-  const all = getAllProperties();
+  const all = await getAllProperties();
   const { total, results, page, pages, allMatched } = search(all, filters);
   const facets = computeFacets(all, filters);
   const close = closeMatches(all, filters, new Set(allMatched.map((p) => p.id)), results.length ? 6 : 9);

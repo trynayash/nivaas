@@ -9,6 +9,7 @@ import { FloorPlan } from "@/components/FloorPlan";
 import { PropertyArt } from "@/components/PropertyArt";
 import { PropertyCard, SampleTag } from "@/components/PropertyCard";
 import { getPublishedPage } from "@/lib/cms/store";
+import { isAdmin } from "@/lib/auth";
 import { bhkLabel, formatNumber, formatPrice, formatSqft } from "@/lib/format";
 import { getAllProperties, getPropertyBySlug } from "@/lib/properties";
 import { recommend } from "@/lib/recommend";
@@ -20,21 +21,23 @@ export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const p = getPropertyBySlug((await params).slug);
+  const p = await getPropertyBySlug((await params).slug);
   if (!p) return { title: "Property not found" };
   return { title: `${p.title}, ${p.location.cityName} — ${formatPrice(p.price)}`, description: p.description };
 }
 
 export default async function PropertyPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const p = getPropertyBySlug(slug);
+  const sp = await searchParams;
+  // Studio can preview unpublished listings with ?preview=1.
+  const preview = sp.preview === "1" && (await isAdmin());
+  const p = await getPropertyBySlug(slug, preview);
   if (!p) notFound();
 
-  const sp = await searchParams;
   const { filters: context } = filtersFromParams(sp);
   const fromSearch = hasAnyCriteria(context) || !!context.q;
   const ctxQuery = fromSearch ? filtersToParams({ ...context, page: 1 }).toString() : "";
-  const all = getAllProperties();
+  const all = await getAllProperties();
   const recs = recommend(p, all, fromSearch ? context : undefined, 8);
 
   const isPlot = p.type === "Plot";

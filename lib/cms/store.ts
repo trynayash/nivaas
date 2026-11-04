@@ -1,4 +1,5 @@
 import "server-only";
+import { assertWritableFallback, hasDatabase } from "@/lib/db";
 import type { Page } from "./schema";
 import { jsonFileStorage } from "./storage/json-file";
 import { postgresStorage } from "./storage/postgres";
@@ -8,10 +9,8 @@ export type { CmsDoc } from "./storage/types";
 
 /** Postgres when DATABASE_URL is set; the JSON file in data/ otherwise (local development). */
 export function cmsStorage(): CmsStorage {
-  if (process.env.DATABASE_URL) return postgresStorage;
-  if (process.env.VERCEL) {
-    throw new Error("DATABASE_URL is not set. Vercel's file system is read-only, so CMS content must be stored in Postgres.");
-  }
+  if (hasDatabase()) return postgresStorage;
+  assertWritableFallback("CMS content");
   return jsonFileStorage;
 }
 

@@ -1,26 +1,17 @@
 import "server-only";
-import fs from "node:fs";
-import path from "node:path";
-import { generateProperties } from "./seed";
+import { cache } from "react";
+import { listingStore } from "./listings/store";
 import type { Property } from "./types";
 
-let cache: Property[] | null = null;
-
 /**
- * Property inventory. Uses data/properties.json when present (real inventory),
- * otherwise deterministic sample data. Swap this for a database query in production.
+ * Published listings for the public site. `cache` de-duplicates calls within one request
+ * (e.g. generateMetadata + the page), so each page hits the database once.
  */
-export function getAllProperties(): Property[] {
-  if (cache) return cache;
-  const file = path.join(process.cwd(), "data", "properties.json");
-  if (fs.existsSync(file)) {
-    cache = JSON.parse(fs.readFileSync(file, "utf8")) as Property[];
-  } else {
-    cache = generateProperties();
-  }
-  return cache;
-}
+export const getAllProperties = cache(async (): Promise<Property[]> => listingStore().list());
 
-export function getPropertyBySlug(slug: string): Property | undefined {
-  return getAllProperties().find((p) => p.slug === slug);
-}
+/** A listing by slug. Drafts are only returned when `includeDrafts` is set (admin preview). */
+export const getPropertyBySlug = cache(async (slug: string, includeDrafts = false): Promise<Property | undefined> => {
+  const p = await listingStore().getBySlug(slug);
+  if (!p) return undefined;
+  return p.published || includeDrafts ? p : undefined;
+});

@@ -4,6 +4,7 @@ import { Editor } from "@/components/admin/Editor";
 import { isAdmin } from "@/lib/auth";
 import { getCmsDoc } from "@/lib/cms/store";
 import { landingContext } from "@/lib/landing";
+import { newEnquiryCount } from "@/lib/enquiries/count";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Studio", robots: { index: false } };
@@ -17,7 +18,8 @@ export default async function AdminPage() {
       initialPublished={doc.published}
       publishedAt={doc.publishedAt}
       history={doc.history}
-      ctx={landingContext()}
+      ctx={await landingContext()}
+      newEnquiries={await newEnquiryCount()}
     />
   );
 }

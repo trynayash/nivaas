@@ -5,3 +5,6 @@ next-env.d.ts
 data/cms.json
 .env*.local
 nivaas-source.zip
+data/uploads/
+data/properties.json
+data/enquiries.json

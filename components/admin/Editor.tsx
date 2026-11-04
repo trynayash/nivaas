@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorBridge, PageRenderer, RenderCtx } from "@/components/cms/PageRenderer";
 import { Page, SECTION_DEFS, STUDIO_FONTS_HREF, Section, SectionType, Theme, createSection, uid } from "@/lib/cms/schema";
 import { cx } from "@/lib/format";
+import { StudioNav } from "./StudioNav";
 import { InspectorApi, SectionInspector, TextInspector, ThemeInspector, readPath, writeStyle, writeText } from "./Inspector";
 
 type Device = "desktop" | "tablet" | "mobile";
@@ -17,11 +18,12 @@ interface Props {
   publishedAt: string | null;
   history: { at: string; page: Page }[];
   ctx: Omit<RenderCtx, "editor">;
+  newEnquiries?: number;
 }
 
 const fmtTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "never");
 
-export function Editor({ initialDraft, initialPublished, publishedAt: initialPublishedAt, history: initialHistory, ctx }: Props) {
+export function Editor({ initialDraft, initialPublished, publishedAt: initialPublishedAt, history: initialHistory, ctx, newEnquiries }: Props) {
   const [page, setPage] = useState<Page>(initialDraft);
   const pageRef = useRef(page);
   const past = useRef<Page[]>([]);
@@ -293,8 +295,8 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
         <link rel="stylesheet" href={STUDIO_FONTS_HREF} precedence="default" />
         <div className="st-brand">
           <b>Nivaas Studio</b>
-          <span>{page.title}</span>
         </div>
+        <StudioNav active="page" newEnquiries={newEnquiries} />
 
         <div className="st-device" role="radiogroup" aria-label="Preview size">
           {(["desktop", "tablet", "mobile"] as Device[]).map((d) => (

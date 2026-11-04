@@ -5,7 +5,7 @@ import { defaultPage, type Page } from "../schema";
 import { MAX_VERSIONS, type CmsDoc, type CmsStorage } from "./types";
 
 /** Local-development fallback used when DATABASE_URL is not set. Not suitable for serverless hosts. */
-const FILE = path.join(process.cwd(), "data", "cms.json");
+const FILE = path.join(/* turbopackIgnore: true */ process.cwd(), "data", "cms.json");
 
 async function load(): Promise<CmsDoc> {
   try {
