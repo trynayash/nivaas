@@ -5,6 +5,7 @@ import { PropertyCard } from "@/components/PropertyCard";
 import { SearchBar } from "@/components/SearchBar";
 import { FiltersPanel, SortSelect } from "@/components/search/FiltersPanel";
 import { getPublishedPage } from "@/lib/cms/store";
+import { DEFAULT_CONTACT_MESSAGE, whatsappFromEnv } from "@/lib/contact";
 import { getCity } from "@/lib/locations";
 import { getAllProperties } from "@/lib/properties";
 import { Filters, closeMatches, computeFacets, describeFilters, filtersFromParams, filtersToParams, priceLabel, search } from "@/lib/search";
@@ -54,7 +55,7 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
   const site = await getPublishedPage();
 
   return (
-    <SiteShell page={site}>
+    <SiteShell page={site} contact={{ whatsapp: whatsappFromEnv(), message: DEFAULT_CONTACT_MESSAGE }}>
       <div className="search-top">
         <div className="container">
           <SearchBar key={filters.q ?? ""} initial={filters.q ?? ""} size="md" showInterpretation={false} />

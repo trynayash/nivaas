@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { propertyContactMessage, whatsappFromEnv } from "@/lib/contact";
 import { SiteShell } from "@/components/cms/PageRenderer";
 import { EmiCalculator } from "@/components/EmiCalculator";
 import { FloorPlan } from "@/components/FloorPlan";
@@ -80,10 +82,16 @@ export default async function PropertyPage({ params, searchParams }: Props) {
 
   const site = await getPublishedPage();
   const loc = p.location;
+  // Absolute URL for the WhatsApp message (without the visitor's search context).
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  const pageUrl = `${proto}://${host}/property/${p.slug}`;
+  const contact = { whatsapp: whatsappFromEnv(), message: propertyContactMessage(`${p.title}, ${loc.cityName}`, formatPrice(p.price), pageUrl) };
   const crumb = (q: string) => `/search?f=1&${q}`;
 
   return (
-    <SiteShell page={site}>
+    <SiteShell page={site} contact={contact}>
       <div className="container detail">
         <nav className="crumbs" aria-label="Breadcrumb">
           {fromSearch && (

@@ -166,7 +166,7 @@ export const SECTION_DEFS: Record<SectionType, SectionDef> = {
     settings: [
       { key: "sticky", label: "Stick to top while scrolling", type: "toggle" },
       { key: "showCta", label: "Show button", type: "toggle" },
-      { key: "ctaHref", label: "Button link", type: "text" },
+      { key: "ctaHref", label: "Button link", type: "text", hint: "#contact opens WhatsApp chat (number set in CONTACT_WHATSAPP)." },
     ],
     singleton: true,
   },
@@ -302,7 +302,7 @@ export const SECTION_DEFS: Record<SectionType, SectionDef> = {
       { key: "button", label: "Button" },
     ],
     settings: [
-      { key: "href", label: "Button link", type: "text" },
+      { key: "href", label: "Button link", type: "text", hint: "#contact opens WhatsApp chat (number set in CONTACT_WHATSAPP)." },
       { key: "boxed", label: "Show as a card", type: "toggle" },
     ],
   },

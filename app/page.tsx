@@ -3,6 +3,7 @@ import { PageRenderer } from "@/components/cms/PageRenderer";
 import { isAdmin } from "@/lib/auth";
 import { getCmsDoc } from "@/lib/cms/store";
 import { landingContext } from "@/lib/landing";
+import { DEFAULT_CONTACT_MESSAGE, whatsappFromEnv } from "@/lib/contact";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
           <Link href="/admin">Back to editor</Link>
         </div>
       )}
-      <PageRenderer page={page} ctx={landingContext()} />
+      <PageRenderer page={page} ctx={{ ...landingContext(), contact: { whatsapp: whatsappFromEnv(), message: DEFAULT_CONTACT_MESSAGE } }} />
     </>
   );
 }

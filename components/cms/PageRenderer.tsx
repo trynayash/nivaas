@@ -7,6 +7,7 @@ import { Page, Section, SECTION_DEFS, TextBlock, TextStyle, fontsHref, sectionCs
 import { getCity } from "@/lib/locations";
 import { queryToParams } from "@/lib/search";
 import { cx } from "@/lib/format";
+import { type ContactConfig, resolveContactHref } from "@/lib/contact";
 import type { PropertySummary } from "@/lib/types";
 import { PropertyCard } from "../PropertyCard";
 import { SearchBar } from "../SearchBar";
@@ -23,7 +24,33 @@ export interface RenderCtx {
   properties: PropertySummary[];
   cityCounts: Record<string, number>;
   localities?: Record<string, { slug: string; name: string; count: number }[]>;
+  /** Where "#contact" links go (WhatsApp click-to-chat when CONTACT_WHATSAPP is set). */
+  contact?: ContactConfig;
   editor?: EditorBridge;
+}
+
+/** A CMS link: internal paths use <Link>, contact/external links open in a new tab. */
+function CmsLink({ href, ctx, className, children }: { href: string; ctx: RenderCtx; className?: string; children: ReactNode }) {
+  const r = resolveContactHref(href || "#", ctx.contact);
+  if (r.external) {
+    return (
+      <a href={r.href} className={className} target="_blank" rel="noopener noreferrer">
+        {children}
+      </a>
+    );
+  }
+  if (r.href.startsWith("/")) {
+    return (
+      <Link href={r.href} className={className}>
+        {children}
+      </Link>
+    );
+  }
+  return (
+    <a href={r.href} className={className}>
+      {children}
+    </a>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -166,15 +193,15 @@ export function HeaderSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
       </Link>
       <nav className="hdr-nav" aria-label="Main">
         {(s.items ?? []).map((it, i) => (
-          <Link key={i} href={it.href || "#"}>
+          <CmsLink key={i} href={it.href} ctx={ctx}>
             <I s={s} idx={i} field="label" ctx={ctx} />
-          </Link>
+          </CmsLink>
         ))}
       </nav>
       {s.settings.showCta && (
-        <a href={String(s.settings.ctaHref || "#")} className="btn btn-secondary btn-sm hdr-cta">
+        <CmsLink href={String(s.settings.ctaHref || "#")} ctx={ctx} className="btn btn-secondary btn-sm hdr-cta">
           <T s={s} role="cta" ctx={ctx} />
-        </a>
+        </CmsLink>
       )}
     </Shell>
   );
@@ -375,9 +402,9 @@ function CtaSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
         <T s={s} role="heading" ctx={ctx} className="sec-title" />
         <T s={s} role="body" ctx={ctx} className="cta-body sec-muted" />
       </div>
-      <a href={String(s.settings.href || "#")} className={cx("btn", s.style.textColor ? "btn-inverse" : "btn-primary")}>
+      <CmsLink href={String(s.settings.href || "#")} ctx={ctx} className={cx("btn", s.style.textColor ? "btn-inverse" : "btn-primary")}>
         <T s={s} role="button" ctx={ctx} />
-      </a>
+      </CmsLink>
     </Shell>
   );
 }
@@ -410,9 +437,9 @@ export function FooterSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
       </div>
       <nav className="ftr-links" aria-label="Footer">
         {(s.items ?? []).map((it, i) => (
-          <Link key={i} href={it.href || "#"}>
+          <CmsLink key={i} href={it.href} ctx={ctx}>
             <I s={s} idx={i} field="label" ctx={ctx} />
-          </Link>
+          </CmsLink>
         ))}
       </nav>
       <T s={s} role="copyright" ctx={ctx} className="ftr-copy sec-muted" />
@@ -457,10 +484,10 @@ export function PageRenderer({ page, ctx }: { page: Page; ctx: RenderCtx }) {
 }
 
 /** Wraps non-CMS pages (search, property) with the CMS-managed header, footer and theme. */
-export function SiteShell({ page, children }: { page: Page; children: ReactNode }) {
+export function SiteShell({ page, contact, children }: { page: Page; contact?: ContactConfig; children: ReactNode }) {
   const header = page.sections.find((s) => s.type === "header" && !s.hidden);
   const footer = page.sections.find((s) => s.type === "footer" && !s.hidden);
-  const ctx: RenderCtx = { properties: [], cityCounts: {} };
+  const ctx: RenderCtx = { properties: [], cityCounts: {}, contact };
   return (
     <div className="site" style={themeCss(page.theme)}>
       <ThemeFonts page={page} />
