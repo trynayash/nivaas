@@ -47,3 +47,12 @@ describe("rateLimit", () => {
     expect(results).toEqual([true, true, true, false]);
   });
 });
+
+describe("database URL", () => {
+  it("keeps strict SSL verification explicit", async () => {
+    const { connectionString } = await import("@/lib/db");
+    expect(connectionString("postgres://u:p@h/db?sslmode=require")).toBe("postgres://u:p@h/db?sslmode=verify-full");
+    expect(connectionString("postgres://u:p@h/db?channel_binding=require&sslmode=require")).toBe("postgres://u:p@h/db?channel_binding=require&sslmode=verify-full");
+    expect(connectionString("postgres://u:p@localhost/db")).toBe("postgres://u:p@localhost/db");
+  });
+});

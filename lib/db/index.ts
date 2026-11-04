@@ -16,10 +16,19 @@ export function assertWritableFallback(what: string) {
 // instance gets its own pool, so point DATABASE_URL at a pooled endpoint (Neon/Supabase pooler).
 const g = globalThis as unknown as { __nivaasPool?: Pool; __nivaasSchema?: Promise<void> };
 
+/**
+ * pg currently treats sslmode=require/prefer/verify-ca as verify-full (full certificate check) and
+ * warns that this will change to weaker libpq semantics in its next major version. Keep the strict,
+ * secure behaviour explicitly (Neon/Supabase use publicly trusted certificates).
+ */
+export function connectionString(url = process.env.DATABASE_URL ?? "") {
+  return url.replace(/([?&])sslmode=(prefer|require|verify-ca)(?=&|$)/, "$1sslmode=verify-full");
+}
+
 export function pool(): Pool {
   if (!g.__nivaasPool) {
     g.__nivaasPool = new Pool({
-      connectionString: process.env.DATABASE_URL,
+      connectionString: connectionString(),
       max: Number(process.env.PG_POOL_MAX ?? 3),
       idleTimeoutMillis: 10_000,
       connectionTimeoutMillis: 8_000,

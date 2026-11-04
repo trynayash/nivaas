@@ -9,7 +9,9 @@ import { defaultPage } from "../lib/cms/schema";
 
 async function main() {
   if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
-  const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: 1 });
+  // Same strict SSL handling as the app (see connectionString in lib/db).
+  const url = process.env.DATABASE_URL.replace(/([?&])sslmode=(prefer|require|verify-ca)(?=&|$)/, "$1sslmode=verify-full");
+  const pool = new Pool({ connectionString: url, max: 1 });
   try {
     await pool.query(SCHEMA_SQL);
     console.log("✓ schema ready");
