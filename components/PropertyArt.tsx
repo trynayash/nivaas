@@ -1,15 +1,23 @@
-// Deterministic flat illustration used when a listing has no photos.
+// Line-drawn elevation (or survey plan for plots) shown when a listing has no photos.
+// Deliberately quiet: ink on paper, no sky, sun or colour, so it reads as a placeholder, not a photo.
+import type { ReactNode } from "react";
 import type { PropertyType } from "@/lib/types";
 
-function hash(s: string) {
+function rng(seed: string) {
   let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  for (let i = 0; i < seed.length; i++) h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
   return () => {
     h = Math.imul(h ^ (h >>> 13), 0x5bd1e995);
     h ^= h >>> 15;
     return ((h >>> 0) % 10000) / 10000;
   };
 }
+
+const PAPER = ["#ebe7de", "#e7e5dd", "#ece6da"];
+const INK = "#2b2d29";
+const FACADE = "#f7f5ef";
+const GLASS = "#cdc8bc";
+const GROUND = 244;
 
 export function PropertyArt({
   id,
@@ -18,6 +26,7 @@ export function PropertyArt({
   images,
   className,
   label,
+  plotArea,
 }: {
   id: string;
   type: PropertyType;
@@ -25,133 +34,188 @@ export function PropertyArt({
   images?: string[];
   className?: string;
   label?: string;
+  plotArea?: number;
 }) {
   if (images && images.length) {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={images[0]} alt={label ?? ""} className={className} style={{ objectFit: "cover", width: "100%", height: "100%" }} />;
   }
-  const r = hash(id);
-  const sky1 = `hsl(${hue} 42% 86%)`;
-  const sky2 = `hsl(${(hue + 25) % 360} 55% 95%)`;
-  const far = `hsl(${hue} 18% 74%)`;
-  const ground = `hsl(${88 + (hue % 28)} 24% 60%)`;
-  const wall = `hsl(36 30% 94%)`;
-  const wall2 = `hsl(${hue} 16% 84%)`;
-  const accent = `hsl(${hue} 38% 34%)`;
-  const glass = `hsl(${(hue + 190) % 360} 30% 38%)`;
-  const lit = `hsl(42 85% 72%)`;
-  const sunX = 60 + r() * 280;
-  const gid = `g-${id}`;
+  const r = rng(id);
+  const paper = PAPER[hue % PAPER.length];
+  const line = { stroke: INK, strokeWidth: 1.3, fill: "none", strokeLinecap: "square" as const };
+  const face = { ...line, fill: FACADE };
 
-  const windows = (x: number, y: number, w: number, h: number, cols: number, rows: number) => {
-    const out: React.ReactNode[] = [];
+  /** Grid of windows inside a block, one row per floor. */
+  const windows = (x: number, y: number, w: number, floors: number, floorH: number, cols: number) => {
+    const out: ReactNode[] = [];
     const gw = w / cols;
-    const gh = h / rows;
-    for (let c = 0; c < cols; c++)
-      for (let rr = 0; rr < rows; rr++)
+    for (let f = 0; f < floors; f++) {
+      const fy = y + f * floorH;
+      if (f > 0) out.push(<line key={`fl${x}-${f}`} x1={x} y1={fy} x2={x + w} y2={fy} stroke={INK} strokeWidth={0.6} opacity={0.5} />);
+      for (let c = 0; c < cols; c++) {
         out.push(
           <rect
-            key={`${x}-${c}-${rr}`}
-            x={x + c * gw + gw * 0.18}
-            y={y + rr * gh + gh * 0.2}
-            width={gw * 0.64}
-            height={gh * 0.55}
-            rx={1}
-            fill={r() < 0.22 ? lit : glass}
-            opacity={0.9}
+            key={`w${x}-${f}-${c}`}
+            x={x + c * gw + gw * 0.2}
+            y={fy + floorH * 0.28}
+            width={gw * 0.6}
+            height={floorH * 0.46}
+            {...line}
+            strokeWidth={0.9}
+            fill={r() < 0.35 ? GLASS : "none"}
           />
         );
+      }
+    }
     return out;
   };
 
   const tree = (x: number, s = 1) => (
-    <g key={`t${x}`}>
-      <rect x={x - 2 * s} y={196 - 18 * s} width={4 * s} height={20 * s} fill="hsl(25 30% 35%)" />
-      <circle cx={x} cy={196 - 26 * s} r={15 * s} fill={`hsl(${120 + r() * 30} 28% ${38 + r() * 10}%)`} />
+    <g key={`t${x}`} {...line} strokeWidth={1}>
+      <line x1={x} y1={GROUND} x2={x} y2={GROUND - 30 * s} />
+      <circle cx={x} cy={GROUND - 44 * s} r={17 * s} />
     </g>
   );
 
-  let building: React.ReactNode;
-  if (type === "Apartment" || type === "Penthouse") {
-    const towers = r() < 0.5 ? 1 : 2;
-    building = (
+  let drawing: ReactNode;
+  if (type === "Plot") {
+    const area = plotArea ?? 2400;
+    const wFt = Math.round(Math.sqrt(area * 1.5));
+    const hFt = Math.round(area / wFt);
+    const W = 210;
+    const H = Math.round((W * hFt) / wFt);
+    const x0 = 200 - W / 2;
+    const y0 = 150 - H / 2;
+    drawing = (
       <g>
-        {towers === 2 && (
+        <polygon points={`${x0},${y0} ${x0 + W},${y0 + 6} ${x0 + W - 4},${y0 + H} ${x0 + 3},${y0 + H - 4}`} {...line} strokeDasharray="6 4" fill={FACADE} />
+        {/* dimension lines */}
+        <g {...line} strokeWidth={0.8}>
+          <line x1={x0} y1={y0 - 16} x2={x0 + W} y2={y0 - 16} />
+          <line x1={x0} y1={y0 - 21} x2={x0} y2={y0 - 11} />
+          <line x1={x0 + W} y1={y0 - 21} x2={x0 + W} y2={y0 - 11} />
+          <line x1={x0 - 16} y1={y0} x2={x0 - 16} y2={y0 + H} />
+          <line x1={x0 - 21} y1={y0} x2={x0 - 11} y2={y0} />
+          <line x1={x0 - 21} y1={y0 + H} x2={x0 - 11} y2={y0 + H} />
+        </g>
+        <text x={200} y={y0 - 22} textAnchor="middle" className="art-label">{wFt}′</text>
+        <text x={x0 - 24} y={y0 + H / 2} textAnchor="end" dominantBaseline="middle" className="art-label">{hFt}′</text>
+        <text x={200} y={y0 + H / 2} textAnchor="middle" dominantBaseline="middle" className="art-label">{area.toLocaleString("en-IN")} sq.ft</text>
+        {/* road */}
+        <line x1={40} y1={y0 + H + 26} x2={360} y2={y0 + H + 26} {...line} strokeWidth={0.8} />
+        <text x={200} y={y0 + H + 42} textAnchor="middle" className="art-label">ROAD</text>
+        {/* north arrow */}
+        <g transform="translate(348 46)" {...line} strokeWidth={1}>
+          <line x1={0} y1={14} x2={0} y2={-12} />
+          <polyline points="-5,-5 0,-13 5,-5" />
+        </g>
+        <text x={348} y={74} textAnchor="middle" className="art-label">N</text>
+      </g>
+    );
+  } else if (type === "Apartment" || type === "Penthouse") {
+    const floors = 9 + Math.floor(r() * 3);
+    const fh = 17;
+    const top = GROUND - floors * fh;
+    const second = r() < 0.55;
+    drawing = (
+      <g>
+        {second && (
           <g>
-            <rect x={235} y={70} width={78} height={130} fill={wall2} />
-            {windows(239, 78, 70, 116, 3, 7)}
+            <rect x={252} y={GROUND - 6 * fh} width={70} height={6 * fh} {...face} />
+            {windows(252, GROUND - 6 * fh, 70, 6, fh, 3)}
           </g>
         )}
-        <rect x={130} y={42} width={110} height={158} fill={wall} />
-        <rect x={130} y={42} width={10} height={158} fill={accent} opacity={0.85} />
-        {windows(144, 52, 92, 140, 4, 8)}
-        {type === "Penthouse" && <rect x={150} y={22} width={78} height={20} fill={glass} opacity={0.85} />}
-        <rect x={122} y={38} width={126} height={6} fill={accent} />
-      </g>
-    );
-  } else if (type === "Plot") {
-    building = (
-      <g>
-        <polygon points="70,205 330,205 300,175 100,175" fill={`hsl(${(hue + 60) % 360} 30% 70%)`} />
-        {Array.from({ length: 9 }).map((_, i) => (
-          <rect key={i} x={100 + i * 25} y={164} width={3} height={14} fill="hsl(25 25% 40%)" />
+        <rect x={120} y={top} width={132} height={floors * fh} {...face} />
+        {type === "Penthouse" ? (
+          <g>
+            <rect x={120} y={top} width={132} height={fh} {...face} />
+            <rect x={136} y={top - fh - 4} width={100} height={fh + 4} {...line} fill={GLASS} />
+            {[0, 1, 2, 3, 4].map((i) => (
+              <line key={i} x1={136 + i * 25} y1={top - fh - 4} x2={136 + i * 25} y2={top} stroke={INK} strokeWidth={0.8} />
+            ))}
+            <line x1={128} y1={top - fh - 5} x2={244} y2={top - fh - 5} stroke={INK} strokeWidth={2.2} />
+          </g>
+        ) : (
+          <line x1={116} y1={top} x2={256} y2={top} stroke={INK} strokeWidth={2.2} />
+        )}
+        {windows(120, top, 132, floors, fh, 5)}
+        {/* balcony rails on alternate floors */}
+        {Array.from({ length: Math.floor(floors / 2) }).map((_, i) => (
+          <line key={`b${i}`} x1={112} y1={top + (i * 2 + 1) * fh + fh * 0.8} x2={150} y2={top + (i * 2 + 1) * fh + fh * 0.8} stroke={INK} strokeWidth={1} />
         ))}
-        <rect x={100} y={168} width={203} height={2} fill="hsl(25 25% 40%)" />
-        <rect x={196} y={128} width={4} height={50} fill="hsl(25 25% 35%)" />
-        <rect x={176} y={128} width={44} height={22} rx={2} fill={wall} stroke={accent} strokeWidth={2} />
-        <text x={198} y={143} fontSize={11} fontFamily="sans-serif" fontWeight={700} textAnchor="middle" fill={accent}>
-          PLOT
-        </text>
+        <rect x={170} y={GROUND - 22} width={32} height={22} {...line} fill={GLASS} />
+        <line x1={160} y1={GROUND - 24} x2={212} y2={GROUND - 24} stroke={INK} strokeWidth={2} />
+        {tree(70, 0.9)}
       </g>
     );
-  } else {
-    // Villa / Independent House / Row House
-    const units = type === "Row House" ? 3 : 1;
-    const w = type === "Row House" ? 70 : 150;
-    const x0 = type === "Row House" ? 95 : 125;
-    building = (
+  } else if (type === "Villa") {
+    drawing = (
       <g>
-        {Array.from({ length: units }).map((_, i) => {
-          const x = x0 + i * (w + 4);
-          const modern = type === "Villa" && r() < 0.6;
+        <rect x={84} y={186} width={196} height={58} {...face} />
+        <rect x={150} y={136} width={176} height={50} {...face} />
+        <line x1={78} y1={186} x2={286} y2={186} stroke={INK} strokeWidth={2.4} />
+        <line x1={144} y1={136} x2={332} y2={136} stroke={INK} strokeWidth={2.4} />
+        <rect x={96} y={198} width={96} height={46} {...line} fill={GLASS} />
+        {[1, 2, 3].map((i) => (
+          <line key={i} x1={96 + i * 24} y1={198} x2={96 + i * 24} y2={GROUND} stroke={INK} strokeWidth={0.8} />
+        ))}
+        <rect x={212} y={200} width={22} height={44} {...line} />
+        <rect x={172} y={148} width={130} height={22} {...line} fill={GLASS} />
+        <line x1={296} y1={244} x2={360} y2={244} stroke={INK} strokeWidth={1} />
+        <rect x={292} y={232} width={64} height={8} {...line} strokeWidth={0.8} />
+        {tree(52, 1.05)}
+      </g>
+    );
+  } else if (type === "Row House") {
+    drawing = (
+      <g>
+        {[0, 1, 2].map((i) => {
+          const x = 84 + i * 78;
           return (
             <g key={i}>
-              <rect x={x} y={120} width={w} height={80} fill={wall} />
-              {modern ? (
-                <>
-                  <rect x={x + w * 0.35} y={88} width={w * 0.65} height={34} fill={wall2} />
-                  <rect x={x - 6} y={116} width={w + 12} height={6} fill={accent} />
-                  <rect x={x + w * 0.32} y={84} width={w * 0.71} height={5} fill={accent} />
-                  <rect x={x + w * 0.45} y={94} width={w * 0.45} height={20} fill={glass} />
-                </>
-              ) : (
-                <polygon points={`${x - 8},122 ${x + w / 2},${82} ${x + w + 8},122`} fill={accent} />
-              )}
-              <rect x={x + w * 0.12} y={140} width={w * 0.28} height={26} fill={glass} />
-              <rect x={x + w * 0.6} y={150} width={w * 0.22} height={50} fill={`hsl(${hue} 30% 28%)`} />
+              <rect x={x} y={168} width={78} height={76} {...face} />
+              <polygon points={`${x - 4},170 ${x + 39},130 ${x + 82},170`} {...face} />
+              <rect x={x + 12} y={206} width={18} height={38} {...line} />
+              <rect x={x + 42} y={186} width={24} height={22} {...line} fill={i === 1 ? GLASS : "none"} />
+              <line x1={x + 54} y1={186} x2={x + 54} y2={208} stroke={INK} strokeWidth={0.8} />
             </g>
           );
         })}
-        {type === "Villa" && <rect x={110} y={198} width={180} height={8} rx={4} fill={`hsl(195 60% 62%)`} opacity={0.9} />}
+        {tree(56, 0.9)}
+      </g>
+    );
+  } else {
+    // Independent House
+    drawing = (
+      <g>
+        <rect x={124} y={164} width={156} height={80} {...face} />
+        <polygon points="112,166 202,108 292,166" {...face} />
+        <rect x={188} y={200} width={26} height={44} {...line} />
+        <rect x={140} y={184} width={32} height={28} {...line} fill={GLASS} />
+        <line x1={156} y1={184} x2={156} y2={212} stroke={INK} strokeWidth={0.8} />
+        <rect x={232} y={184} width={32} height={28} {...line} />
+        <line x1={248} y1={184} x2={248} y2={212} stroke={INK} strokeWidth={0.8} />
+        <rect x={190} y={136} width={24} height={18} {...line} />
+        {/* compound wall with gate opening */}
+        <polyline points={`40,${GROUND} 40,${GROUND - 16} 176,${GROUND - 16}`} {...line} strokeWidth={1} />
+        <polyline points={`226,${GROUND - 16} 362,${GROUND - 16} 362,${GROUND}`} {...line} strokeWidth={1} />
+        {tree(330, 0.85)}
       </g>
     );
   }
 
   return (
-    <svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMid slice" className={className} role="img" aria-label={label ?? `${type} illustration`}>
-      <defs>
-        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stopColor={sky1} />
-          <stop offset="1" stopColor={sky2} />
-        </linearGradient>
-      </defs>
-      <rect width="400" height="260" fill={`url(#${gid})`} />
-      <circle cx={sunX} cy={58} r={22} fill="hsl(32 90% 78%)" opacity={0.9} />
-      <path d={`M0 190 Q 80 ${140 + r() * 30} 160 180 T 320 170 T 400 160 V260 H0Z`} fill={far} opacity={0.7} />
-      <rect y={196} width={400} height={64} fill={ground} />
-      {building}
-      {tree(70 + r() * 30, 1)}
-      {tree(330 + r() * 30, 0.8)}
+    <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" className={className} role="img" aria-label={label ?? `${type} — drawing, no photos yet`}>
+      <rect width="400" height="300" fill={paper} />
+      {type !== "Plot" && (
+        <g>
+          <line x1={0} y1={GROUND} x2={400} y2={GROUND} stroke={INK} strokeWidth={1.3} />
+          {Array.from({ length: 26 }).map((_, i) => (
+            <line key={i} x1={i * 16} y1={GROUND + 4} x2={i * 16 + 8} y2={GROUND + 12} stroke={INK} strokeWidth={0.6} opacity={0.45} />
+          ))}
+        </g>
+      )}
+      {drawing}
     </svg>
   );
 }

@@ -50,7 +50,7 @@ export function SearchBar({
     const loc = parsed.matchedLocations
       .slice()
       .sort((a, b) => (a.level === "area" ? -1 : b.level === "area" ? 1 : a.level === "locality" ? -1 : 1))[0];
-    if (loc) chips.push(`📍 ${loc.label}`);
+    if (loc) chips.push(loc.label);
     const pl = priceLabel(parsed.minPrice, parsed.maxPrice);
     if (pl) chips.push(pl);
     if (parsed.status) chips.push(parsed.status);
@@ -85,7 +85,7 @@ export function SearchBar({
       action="/search"
     >
       <div className="sb-field">
-        <Icon name="search" size={size === "lg" ? 22 : 18} className="sb-icon" />
+        <Icon name="search" size={size === "lg" ? 20 : 18} className="sb-icon" />
         <input
           ref={inputRef}
           name="q"
@@ -114,7 +114,7 @@ export function SearchBar({
           }}
           tabIndex={inert ? -1 : undefined}
         />
-        <button type="submit" className="btn btn-accent sb-submit" tabIndex={inert ? -1 : undefined}>
+        <button type="submit" className="btn btn-primary sb-submit" tabIndex={inert ? -1 : undefined}>
           Search
         </button>
         {open && items.length > 0 && !inert && (
@@ -130,7 +130,6 @@ export function SearchBar({
                   pick(l);
                 }}
               >
-                <Icon name="pin" size={15} />
                 <span>{l.label}</span>
                 <em>{l.level === "city" ? "City" : l.level === "locality" ? "Locality" : "Area"}</em>
               </li>
@@ -140,11 +139,8 @@ export function SearchBar({
       </div>
       {showInterpretation && chips.length > 0 && (
         <p className="sb-understood" aria-live="polite">
-          <span>Searching for</span>
-          {chips.map((c) => (
-            <b key={c}>{c}</b>
-          ))}
-          {parsed?.unmatched && <span className="sb-unmatched">· ignoring “{parsed.unmatched}”</span>}
+          Searching for <b>{chips.join(" · ")}</b>
+          {parsed?.unmatched && <span className="sb-unmatched"> — ignoring “{parsed.unmatched}”</span>}
         </p>
       )}
     </form>

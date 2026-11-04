@@ -342,7 +342,7 @@ export function SectionInspector({ api, section }: { api: InspectorApi; section:
               { value: "gradient", label: "Gradient" },
               { value: "image", label: "Image" },
             ]}
-            onChange={(bgType) => setStyle((bgType === "gradient" || bgType === "image") && !st.textColor ? { bgType, textColor: "#ffffff" } : { bgType })}
+            onChange={(bgType) => setStyle((bgType === "gradient" || bgType === "image") && !st.textColor ? { bgType, textColor: "#f5f3ee" } : { bgType })}
             small
           />
         </Field>
@@ -438,10 +438,10 @@ const THEME_COLORS: [keyof Theme, string][] = [
 ];
 
 const PRESETS: { name: string; theme: Partial<Theme> }[] = [
-  { name: "Banyan", theme: { primary: "#1f3a2e", accent: "#c8553d", background: "#fbf8f3", surface: "#ffffff", ink: "#1c2420", muted: "#5d6b63" } },
-  { name: "Konkan", theme: { primary: "#0f4c5c", accent: "#e36414", background: "#f6f4ef", surface: "#ffffff", ink: "#14213d", muted: "#5c677d" } },
-  { name: "Laterite", theme: { primary: "#5b2a1e", accent: "#d08c3c", background: "#fbf6f1", surface: "#ffffff", ink: "#2b1a14", muted: "#7a6258" } },
-  { name: "Slate", theme: { primary: "#1e293b", accent: "#4f46e5", background: "#f8fafc", surface: "#ffffff", ink: "#0f172a", muted: "#64748b" } },
+  { name: "Ink & laterite", theme: { primary: "#1d211e", accent: "#9b3d23", background: "#f5f3ee", surface: "#fcfbf8", ink: "#1d211e", muted: "#66635b" } },
+  { name: "Konkan teal", theme: { primary: "#163b3a", accent: "#a4502a", background: "#f3f2ec", surface: "#fbfaf6", ink: "#162523", muted: "#5d6764" } },
+  { name: "Deccan ochre", theme: { primary: "#2a2723", accent: "#93661a", background: "#f6f2ea", surface: "#fdfbf6", ink: "#2a2723", muted: "#6c655a" } },
+  { name: "Plain white", theme: { primary: "#111111", accent: "#a33a1f", background: "#ffffff", surface: "#ffffff", ink: "#111111", muted: "#5f5f5f" } },
 ];
 
 export function ThemeInspector({ api }: { api: InspectorApi }) {

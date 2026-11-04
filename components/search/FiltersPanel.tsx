@@ -6,7 +6,6 @@ import { getCity } from "@/lib/locations";
 import { Facets, Filters, SORTS, SortKey, filtersToParams } from "@/lib/search";
 import { CRORE, LAKH, cx, formatPrice } from "@/lib/format";
 import { FURNISHINGS, PROPERTY_TYPES } from "@/lib/types";
-import { Icon } from "../Icon";
 
 const PRICE_STEPS = [20, 30, 40, 50, 60, 75, 90].map((l) => l * LAKH).concat([1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10].map((c) => c * CRORE));
 const AREA_STEPS = [500, 750, 1000, 1250, 1500, 1750, 2000, 2500, 3000, 4000, 5000];
@@ -46,14 +45,15 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
 
   return (
     <div className={cx("filters", open && "is-open", pending && "is-pending")}>
-      <button type="button" className="filters-toggle btn btn-outline" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
-        <Icon name="filter" /> Filters {activeCount > 0 && <span className="count-pill">{activeCount}</span>}
+      <button type="button" className="filters-toggle btn btn-secondary" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        {open ? "Hide filters" : "Filters"}
+        {activeCount > 0 && <span className="num"> ({activeCount})</span>}
       </button>
       <div className="filters-body">
         <div className="filters-title">
           <h2>Filters</h2>
           {activeCount > 0 && (
-            <button type="button" className="link-btn" onClick={() => apply({ city: undefined, localities: [], areas: [], bhk: [], minPrice: undefined, maxPrice: undefined, types: [], status: undefined, furnishing: [], minArea: undefined, maxArea: undefined, amenities: [] })}>
+            <button type="button" className="text-link" onClick={() => apply({ city: undefined, localities: [], areas: [], bhk: [], minPrice: undefined, maxPrice: undefined, types: [], status: undefined, furnishing: [], minArea: undefined, maxArea: undefined, amenities: [] })}>
               Reset all
             </button>
           )}
@@ -125,7 +125,7 @@ export function FiltersPanel({ filters, facets }: { filters: Filters; facets: Fa
               const on = filters.bhk.includes(b);
               if (b === 0 && !n && !on) return null;
               return (
-                <button key={b} type="button" className={cx("chip", on && "is-on")} aria-pressed={on} onClick={() => apply({ bhk: toggle(filters.bhk, b).sort() })} disabled={!n && !on}>
+                <button key={b} type="button" className={cx("chip chip-sm", on && "is-on")} aria-pressed={on} onClick={() => apply({ bhk: toggle(filters.bhk, b).sort() })} disabled={!n && !on}>
                   {b === 0 ? "Plot" : `${b} BHK`}
                   <small>{n}</small>
                 </button>
@@ -257,7 +257,7 @@ export function SortSelect({ filters }: { filters: Filters }) {
   const router = useRouter();
   return (
     <label className="sort">
-      <span>Sort</span>
+      <span>Sort by</span>
       <select
         value={filters.sort}
         onChange={(e) => router.push(`/search?${filtersToParams({ ...filters, sort: e.target.value as SortKey, page: 1 }).toString()}`, { scroll: false })}

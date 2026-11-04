@@ -4,9 +4,8 @@ import { notFound } from "next/navigation";
 import { SiteShell } from "@/components/cms/PageRenderer";
 import { EmiCalculator } from "@/components/EmiCalculator";
 import { FloorPlan } from "@/components/FloorPlan";
-import { Icon } from "@/components/Icon";
 import { PropertyArt } from "@/components/PropertyArt";
-import { PropertyCard } from "@/components/PropertyCard";
+import { PropertyCard, SampleTag } from "@/components/PropertyCard";
 import { getPublishedPage } from "@/lib/cms/store";
 import { bhkLabel, formatNumber, formatPrice, formatSqft } from "@/lib/format";
 import { getAllProperties, getPropertyBySlug } from "@/lib/properties";
@@ -36,33 +35,33 @@ export default async function PropertyPage({ params, searchParams }: Props) {
   const all = getAllProperties();
   const recs = recommend(p, all, fromSearch ? context : undefined, 8);
 
+  const isPlot = p.type === "Plot";
   const ppsf = Math.round(p.price / p.superBuiltUpArea);
-  const peers = all.filter((x) => x.location.locality === p.location.locality && x.type !== "Plot" && p.type !== "Plot");
+  const peers = isPlot ? [] : all.filter((x) => x.location.locality === p.location.locality && x.type !== "Plot");
   const avgPpsf = peers.length > 2 ? Math.round(peers.reduce((s, x) => s + x.price / x.superBuiltUpArea, 0) / peers.length) : null;
   const vsAvg = avgPpsf ? Math.round(((ppsf - avgPpsf) / avgPpsf) * 100) : null;
-  const isPlot = p.type === "Plot";
 
-  const facts: [icon: string, label: string, value: string][] = [
-    ["bed", "Configuration", bhkLabel(p.bhk, p.type)],
-    ["building", "Property type", p.type],
+  const details: [label: string, value: string][] = [
+    ["Configuration", bhkLabel(p.bhk, p.type)],
+    ["Property type", p.type],
     ...(isPlot
-      ? ([["area", "Plot area", formatSqft(p.plotArea ?? p.superBuiltUpArea)]] as [string, string, string][])
+      ? ([["Plot area", formatSqft(p.plotArea ?? p.superBuiltUpArea)]] as [string, string][])
       : ([
-          ["area", "Carpet area", formatSqft(p.carpetArea)],
-          ["area", "Built-up area", formatSqft(p.builtUpArea)],
-          ["area", "Super built-up area", formatSqft(p.superBuiltUpArea)],
-          ...(p.plotArea ? [["layers", "Plot area", formatSqft(p.plotArea)]] : []),
-          ["bath", "Bathrooms", String(p.bathrooms)],
-          ["sofa", "Balconies", String(p.balconies)],
-          ["layers", "Floor", p.floor !== undefined ? `${p.floor} of ${p.totalFloors}` : `${p.totalFloors}-storey`],
-          ["compass", "Facing", p.facing],
-          ["sofa", "Furnishing", p.furnishing],
-        ] as [string, string, string][])),
-    ["calendar", "Status", p.status],
-    ["calendar", "Possession", p.possession],
-    ...(p.ageYears !== undefined ? ([["calendar", "Age of property", p.ageYears === 0 ? "New" : `${p.ageYears} year${p.ageYears > 1 ? "s" : ""}`]] as [string, string, string][]) : []),
-    ...(isPlot ? [] : ([["car", "Parking", `${p.parking.covered} covered${p.parking.open ? `, ${p.parking.open} open` : ""}`]] as [string, string, string][])),
-    ["key", "Ownership", p.ownership],
+          ["Carpet area", formatSqft(p.carpetArea)],
+          ["Built-up area", formatSqft(p.builtUpArea)],
+          ["Super built-up area", formatSqft(p.superBuiltUpArea)],
+          ...(p.plotArea ? [["Plot area", formatSqft(p.plotArea)]] : []),
+          ["Bathrooms", String(p.bathrooms)],
+          ["Balconies", String(p.balconies)],
+          ["Floor", p.floor !== undefined ? `${p.floor} of ${p.totalFloors}` : `${p.totalFloors} storeys`],
+          ["Facing", p.facing],
+          ["Furnishing", p.furnishing],
+        ] as [string, string][])),
+    ["Status", p.status],
+    ["Possession", p.possession],
+    ...(p.ageYears !== undefined ? ([["Age", p.ageYears === 0 ? "New" : `${p.ageYears} year${p.ageYears > 1 ? "s" : ""}`]] as [string, string][]) : []),
+    ...(isPlot ? [] : ([["Parking", `${p.parking.covered} covered${p.parking.open ? `, ${p.parking.open} open` : ""}`]] as [string, string][])),
+    ["Ownership", p.ownership],
   ];
 
   const specs: [string, string][] = [
@@ -88,8 +87,8 @@ export default async function PropertyPage({ params, searchParams }: Props) {
       <div className="container detail">
         <nav className="crumbs" aria-label="Breadcrumb">
           {fromSearch && (
-            <Link href={`/search?${ctxQuery}`} className="back-link">
-              <Icon name="back" size={15} /> Back to results
+            <Link href={`/search?${ctxQuery}`} className="text-link">
+              ← Back to results
             </Link>
           )}
           <ol>
@@ -110,102 +109,92 @@ export default async function PropertyPage({ params, searchParams }: Props) {
 
         <header className="detail-head">
           <div>
-            <p className="kicker">
-              {p.projectName} · by {p.developer}
+            <p className="detail-kicker">
+              {p.projectName} · {p.developer === "Owner (resale)" ? "resale by owner" : p.developer}
+              {p.isSample && <SampleTag />}
             </p>
             <h1>{p.title}</h1>
-            <p className="muted detail-address">
-              <Icon name="pin" size={15} /> {loc.address}
-            </p>
-            <div className="detail-tags">
-              <span className="badge badge-soft">{bhkLabel(p.bhk, p.type)}</span>
-              <span className="badge badge-soft">{formatSqft(p.superBuiltUpArea)}</span>
-              <span className="badge badge-soft">{p.status}</span>
-              {p.rera.applicable ? (
-                <span className="badge badge-ok">
-                  <Icon name="shield" size={13} /> RERA registered
-                </span>
-              ) : (
-                <span className="badge badge-warn">RERA not applicable</span>
-              )}
-            </div>
+            <p className="detail-address">{loc.address}</p>
           </div>
           <div className="detail-price">
-            <strong>{formatPrice(p.price)}</strong>
-            <span className="muted">₹{formatNumber(ppsf)} / sq.ft</span>
+            <strong className="num">{formatPrice(p.price)}</strong>
+            <span>₹{formatNumber(ppsf)} per sq.ft</span>
           </div>
         </header>
 
-        <div className="detail-gallery">
+        <div className={isPlot ? "detail-gallery is-single" : "detail-gallery"}>
           <figure className="gal-main">
-            <PropertyArt id={p.id} type={p.type} hue={p.hue} images={p.images} label={p.title} className="gal-art" />
-            {!p.images.length && <figcaption>Illustration — photos to be added by the seller</figcaption>}
+            <PropertyArt id={p.id} type={p.type} hue={p.hue} images={p.images} label={p.title} plotArea={p.plotArea} className="gal-art" />
+            {!p.images.length && <figcaption>{isPlot ? "Plot sketch from listed area — not a survey" : "Drawing only — no photos yet"}</figcaption>}
           </figure>
           {!isPlot && (
             <figure className="gal-plan">
               <FloorPlan bhk={p.bhk} bathrooms={p.bathrooms} balconies={p.balconies} carpetArea={p.carpetArea} />
-              <figcaption>Indicative {bhkLabel(p.bhk)} layout · {formatSqft(p.carpetArea)} carpet</figcaption>
+              <figcaption>
+                Indicative {bhkLabel(p.bhk)} layout, {formatSqft(p.carpetArea)} carpet — not the developer’s plan
+              </figcaption>
             </figure>
           )}
         </div>
 
         <div className="detail-grid">
           <div className="detail-main">
-            <section className="panel" aria-labelledby="facts">
-              <h2 id="facts">Property details</h2>
-              <dl className="facts">
-                {facts.map(([icon, label, value]) => (
-                  <div key={label} className="fact">
-                    <Icon name={icon} size={18} />
-                    <dt>{label}</dt>
-                    <dd>{value}</dd>
+            <section className="dsec" aria-labelledby="details">
+              <h2 id="details">Details</h2>
+              <dl className="dtable">
+                {details.map(([k, v]) => (
+                  <div key={k}>
+                    <dt>{k}</dt>
+                    <dd>{v}</dd>
                   </div>
                 ))}
               </dl>
             </section>
 
-            <section className={`panel rera ${p.rera.applicable ? "is-ok" : "is-warn"}`} aria-labelledby="rera">
-              <h2 id="rera">
-                <Icon name="shield" size={20} /> RERA information
-              </h2>
-              {p.rera.applicable ? (
-                <dl className="rera-grid">
-                  <div>
-                    <dt>Status</dt>
-                    <dd>Registered</dd>
-                  </div>
-                  <div>
-                    <dt>RERA number</dt>
-                    <dd className="mono">{p.rera.number}</dd>
-                  </div>
-                  <div>
-                    <dt>Authority</dt>
-                    <dd>{p.rera.authority}</dd>
-                  </div>
-                </dl>
-              ) : (
-                <p>
-                  <b>Not applicable.</b> {p.rera.note}
-                </p>
-              )}
-              <a href={p.rera.website} target="_blank" rel="noopener noreferrer" className="ext-link">
-                Verify on the {p.rera.authority} portal <Icon name="external" size={14} />
-              </a>
+            <section className="dsec" aria-labelledby="rera">
+              <h2 id="rera">RERA</h2>
+              <div className={`rera-box ${p.rera.applicable ? "is-ok" : "is-na"}`}>
+                {p.rera.applicable ? (
+                  <dl className="rera-grid">
+                    <div>
+                      <dt>Status</dt>
+                      <dd>Registered</dd>
+                    </div>
+                    <div>
+                      <dt>Registration number</dt>
+                      <dd className="mono">{p.rera.number}</dd>
+                    </div>
+                    <div>
+                      <dt>Authority</dt>
+                      <dd>{p.rera.authority}</dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <p>
+                    <b>Registration not applicable.</b> {p.rera.note}
+                  </p>
+                )}
+                {p.isSample ? (
+                  <p className="rera-note">This is a sample listing. The registration number above is illustrative and is not on the {p.rera.authority} register.</p>
+                ) : (
+                  <a href={p.rera.website} target="_blank" rel="noopener noreferrer" className="text-link">
+                    Check this on the {p.rera.authority} website ↗
+                  </a>
+                )}
+              </div>
             </section>
 
-            <section className="panel" aria-labelledby="overview">
-              <h2 id="overview">Overview</h2>
+            <section className="dsec" aria-labelledby="overview">
+              <h2 id="overview">About this home</h2>
               <p className="lead">{p.description}</p>
-              <ul className="highlights">
+              <ul className="dash-list">
                 {p.highlights.map((h) => (
-                  <li key={h}>
-                    <Icon name="check" size={16} /> {h}
-                  </li>
+                  <li key={h}>{h}</li>
                 ))}
               </ul>
             </section>
 
-            <section className="panel" aria-labelledby="amenities">
+            <section className="dsec" aria-labelledby="amenities">
               <h2 id="amenities">Amenities</h2>
               <div className="amenity-groups">
                 {Object.entries(AMENITY_GROUPS).map(([group, list]) => {
@@ -216,9 +205,7 @@ export default async function PropertyPage({ params, searchParams }: Props) {
                       <h3>{group}</h3>
                       <ul>
                         {have.map((a) => (
-                          <li key={a}>
-                            <Icon name="check" size={14} /> {a}
-                          </li>
+                          <li key={a}>{a}</li>
                         ))}
                       </ul>
                     </div>
@@ -227,9 +214,9 @@ export default async function PropertyPage({ params, searchParams }: Props) {
               </div>
             </section>
 
-            <section className="panel" aria-labelledby="specs">
+            <section className="dsec" aria-labelledby="specs">
               <h2 id="specs">Specifications</h2>
-              <dl className="spec-list">
+              <dl className="dtable dtable-2">
                 {specs.map(([k, v]) => (
                   <div key={k}>
                     <dt>{k}</dt>
@@ -239,73 +226,73 @@ export default async function PropertyPage({ params, searchParams }: Props) {
               </dl>
             </section>
 
-            <section className="panel" aria-labelledby="location">
-              <h2 id="location">Location & nearby</h2>
+            <section className="dsec" aria-labelledby="location">
+              <h2 id="location">Location</h2>
               <p className="loc-path">
-                <span>{loc.cityName}</span> <Icon name="arrow" size={14} /> <span>{loc.localityName}</span> <Icon name="arrow" size={14} /> <span>{loc.areaName}</span>
+                {loc.cityName} › {loc.localityName} › {loc.areaName}
               </p>
-              <ul className="nearby">
-                {p.nearby.map((n) => (
-                  <li key={n.name}>
-                    <span className="nearby-kind">{n.kind}</span>
-                    <span>{n.name}</span>
-                    <b>{n.distanceKm} km</b>
-                  </li>
-                ))}
-              </ul>
+              <table className="nearby">
+                <caption className="sr-only">Distances to nearby places</caption>
+                <tbody>
+                  {p.nearby.map((n) => (
+                    <tr key={n.name}>
+                      <th scope="row">{n.name}</th>
+                      <td className="nearby-kind">{n.kind}</td>
+                      <td className="num">{n.distanceKm} km</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {p.isSample && <p className="hint">Distances in sample listings are approximate.</p>}
             </section>
 
-            <section className="panel" aria-labelledby="loan">
+            <section className="dsec" aria-labelledby="loan">
               <h2 id="loan">Home loan</h2>
-              <p className="muted">Approved by: {p.approvedBanks.join(" · ")}</p>
+              <p>Approved by {p.approvedBanks.join(", ")}.</p>
             </section>
           </div>
 
           <aside className="detail-aside">
-            <div className="panel price-card">
-              <p className="muted">Price</p>
-              <p className="price-big">{formatPrice(p.price)}</p>
-              <p className="muted">
-                ₹{formatNumber(ppsf)} / sq.ft {p.maintenancePerMonth ? `· ₹${formatNumber(p.maintenancePerMonth)} maintenance` : ""}
+            <div className="price-box">
+              <p className="price-box-label">Asking price</p>
+              <p className="price-big num">{formatPrice(p.price)}</p>
+              <p className="price-box-sub">
+                ₹{formatNumber(ppsf)} per sq.ft{p.maintenancePerMonth ? ` · ₹${formatNumber(p.maintenancePerMonth)}/month maintenance` : ""}
               </p>
               {vsAvg !== null && (
-                <p className={`insight ${vsAvg <= 0 ? "is-good" : ""}`}>
-                  {vsAvg === 0 ? "At" : `${Math.abs(vsAvg)}% ${vsAvg < 0 ? "below" : "above"}`} the {loc.localityName} average of ₹{formatNumber(avgPpsf!)} / sq.ft
+                <p className="insight">
+                  {vsAvg === 0 ? "In line with" : `${Math.abs(vsAvg)}% ${vsAvg < 0 ? "below" : "above"}`} the {loc.localityName} average of ₹{formatNumber(avgPpsf!)} per sq.ft
+                  {p.isSample ? " (sample data)" : ""}.
                 </p>
               )}
               <EmiCalculator price={p.price} />
-              <a className="btn btn-accent btn-block" href="#similar">
-                See similar homes
+              <a className="btn btn-secondary btn-block" href="#similar">
+                Similar homes ↓
               </a>
             </div>
           </aside>
         </div>
 
         <section id="similar" className="similar" aria-labelledby="similar-title">
-          <div className="close-head">
-            <span className="kicker">
-              <Icon name="spark" size={15} /> You may also like
-            </span>
-            <h2 id="similar-title">Similar properties you may like</h2>
-            <p className="muted">
-              Picked for their location, configuration and price compared with this {bhkLabel(p.bhk, p.type)} in {loc.areaName}
-              {fromSearch && hasAnyCriteria(context) ? <> — and your search for <b>{describeFilters(context)}</b></> : null}.
-            </p>
+          <div className="sec-head">
+            <div className="sec-head-text">
+              <h2 id="similar-title" className="sec-title">
+                Similar homes
+              </h2>
+              <p className="sec-sub sec-muted">
+                Ranked by location, configuration and price against this {bhkLabel(p.bhk, p.type)} in {loc.areaName}
+                {fromSearch && hasAnyCriteria(context) ? <>. Homes that also fit your search ({describeFilters(context)}) rank higher</> : null}.
+              </p>
+            </div>
           </div>
           {recs.length ? (
             <div className="grid-cards">
               {recs.map((r) => (
-                <PropertyCard
-                  key={r.property.id}
-                  p={toSummary(r.property)}
-                  reasons={r.reasons}
-                  score={r.score}
-                  href={`/property/${r.property.slug}${ctxQuery ? `?${ctxQuery}` : ""}`}
-                />
+                <PropertyCard key={r.property.id} p={toSummary(r.property)} reasons={r.reasons} score={r.score} href={`/property/${r.property.slug}${ctxQuery ? `?${ctxQuery}` : ""}`} />
               ))}
             </div>
           ) : (
-            <p className="muted">No similar homes listed in {loc.cityName} right now.</p>
+            <p className="sec-muted">No similar homes listed in {loc.cityName} right now.</p>
           )}
         </section>
       </div>

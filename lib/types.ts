@@ -72,6 +72,8 @@ export interface Property {
   featured: boolean;
   /** Visual seed for generated illustrations */
   hue: number;
+  /** Demo inventory: shown with a "Sample listing" tag and never linked to official registries. */
+  isSample: boolean;
 }
 
 /** Light shape sent to client components & cards. */
@@ -96,6 +98,11 @@ export interface PropertySummary {
   hue: number;
   postedOn: string;
   images: string[];
+  isSample: boolean;
+  developer: string;
+  floor?: number;
+  totalFloors?: number;
+  possession: string;
 }
 
 export function toSummary(p: Property): PropertySummary {
@@ -120,6 +127,11 @@ export function toSummary(p: Property): PropertySummary {
     hue: p.hue,
     postedOn: p.postedOn,
     images: p.images,
+    isSample: !!p.isSample,
+    developer: p.developer,
+    floor: p.floor,
+    totalFloors: p.totalFloors,
+    possession: p.possession,
   };
 }
 

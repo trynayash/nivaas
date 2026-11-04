@@ -4,3 +4,4 @@ next-env.d.ts
 *.tsbuildinfo
 data/cms.json
 .env*.local
+nivaas-source.zip

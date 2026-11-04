@@ -4,7 +4,6 @@ import { SiteShell } from "@/components/cms/PageRenderer";
 import { PropertyCard } from "@/components/PropertyCard";
 import { SearchBar } from "@/components/SearchBar";
 import { FiltersPanel, SortSelect } from "@/components/search/FiltersPanel";
-import { Icon } from "@/components/Icon";
 import { getPublishedPage } from "@/lib/cms/store";
 import { getCity } from "@/lib/locations";
 import { getAllProperties } from "@/lib/properties";
@@ -69,8 +68,8 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
           <div className="results-head">
             <div>
               <h1 id="results-title">{title}</h1>
-              <p className="muted">
-                {total} {total === 1 ? "property" : "properties"} found
+              <p className="muted num">
+                {total} {total === 1 ? "listing" : "listings"}
               </p>
             </div>
             <SortSelect filters={filters} />
@@ -78,18 +77,18 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
 
           {unmatched && (
             <p className="notice">
-              <Icon name="info" size={16} /> We couldn’t match “{unmatched}” to a location or filter, so it was ignored.
+              We couldn’t match “{unmatched}” to a location or filter, so it was ignored.
             </p>
           )}
 
           {chips.length > 0 && (
             <div className="active-chips">
               {chips.map((c) => (
-                <Link key={c.label} className="chip chip-sm is-on" href={`/search?${filtersToParams({ ...filters, ...c.patch, page: 1 }).toString()}`} aria-label={`Remove filter ${c.label}`}>
-                  {c.label} <Icon name="x" size={13} />
+                <Link key={c.label} className="chip chip-sm chip-remove" href={`/search?${filtersToParams({ ...filters, ...c.patch, page: 1 }).toString()}`} aria-label={`Remove filter ${c.label}`}>
+                  {c.label} <span aria-hidden="true">×</span>
                 </Link>
               ))}
-              <Link className="link-btn" href="/search?f=1">
+              <Link className="text-link" href="/search?f=1">
                 Clear all
               </Link>
             </div>
@@ -103,8 +102,8 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
             </div>
           ) : (
             <div className="empty">
-              <h2>No exact matches</h2>
-              <p className="muted">Try removing a filter{close.length ? ", or look at the closest homes below" : ""}.</p>
+              <h2>Nothing matches every filter</h2>
+              <p className="muted">Remove a filter above{close.length ? ", or see the nearest matches below" : ""}.</p>
             </div>
           )}
 
@@ -122,12 +121,13 @@ export default async function SearchPage({ searchParams }: { searchParams: SP })
 
           {close.length > 0 && (
             <section className="close-matches" aria-labelledby="close-title">
-              <div className="close-head">
-                <span className="kicker">
-                  <Icon name="spark" size={15} /> Matching properties
-                </span>
-                <h2 id="close-title">{results.length ? "Close matches you might also like" : "The closest homes to your search"}</h2>
-                <p className="muted">These miss one or two of your criteria — a nearby locality, one bedroom more or less, or slightly over budget.</p>
+              <div className="sec-head">
+                <div className="sec-head-text">
+                  <h2 id="close-title" className="sec-title">
+                    {results.length ? "Close matches" : "Nearest matches"}
+                  </h2>
+                  <p className="sec-sub sec-muted">Each misses one or two of your filters — a nearby locality, one bedroom more or less, or up to 20% over budget. The difference is noted on each.</p>
+                </div>
               </div>
               <div className="grid-cards">
                 {close.map((c) => (

@@ -78,7 +78,7 @@ export function Switch({ checked, onChange, label }: { checked: boolean; onChang
 export function ColorInput({ value, onChange, onReset, placeholder = "Auto" }: { value?: string | null; onChange: (v: string) => void; onReset?: () => void; placeholder?: string }) {
   return (
     <div className="st-color">
-      <input type="color" value={value || "#000000"} onChange={(e) => onChange(e.target.value)} aria-label="Pick colour" />
+      <input type="color" value={value || "#000000"} className={value ? undefined : "is-auto"} onChange={(e) => onChange(e.target.value)} aria-label="Pick colour" />
       <input
         type="text"
         key={value ?? "auto"}

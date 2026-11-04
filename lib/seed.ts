@@ -296,6 +296,7 @@ function makeProperty(city: CityNode, loc: LocalityNode, overrides: Partial<{ ty
     postedOn: posted.toISOString().slice(0, 10),
     featured: false,
     hue: pick(HUES),
+    isSample: true,
   };
 }
 

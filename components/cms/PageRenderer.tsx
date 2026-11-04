@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRef } from "react";
 import type { CSSProperties, ReactNode } from "react";
-import { Page, Section, SECTION_DEFS, TextBlock, TextStyle, sectionCss, textCss, themeCss } from "@/lib/cms/schema";
+import { Page, Section, SECTION_DEFS, TextBlock, TextStyle, fontsHref, sectionCss, textCss, themeCss } from "@/lib/cms/schema";
 import { getCity } from "@/lib/locations";
 import { queryToParams } from "@/lib/search";
 import { cx } from "@/lib/format";
@@ -22,6 +22,7 @@ export interface EditorBridge {
 export interface RenderCtx {
   properties: PropertySummary[];
   cityCounts: Record<string, number>;
+  localities?: Record<string, { slug: string; name: string; count: number }[]>;
   editor?: EditorBridge;
 }
 
@@ -123,7 +124,15 @@ function Shell({
   return (
     <Tag
       id={ed ? undefined : s.type === "cta" ? "contact" : undefined}
-      className={cx("sec", `sec-${s.type}`, ed && "ed-sec", selected && "is-selected", s.hidden && "is-hidden", s.style.textColor && "has-ink")}
+      className={cx(
+        "sec",
+        `sec-${s.type}`,
+        s.style.bgType !== "none" && "has-bg",
+        ed && "ed-sec",
+        selected && "is-selected",
+        s.hidden && "is-hidden",
+        s.style.textColor && "has-ink"
+      )}
       style={{ ...sectionCss(s.style), ...style }}
       data-align={s.style.align}
       data-ed-label={ed ? s.name || SECTION_DEFS[s.type].label : undefined}
@@ -153,9 +162,6 @@ export function HeaderSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   return (
     <Shell s={s} ctx={ctx} as="header" innerClass="hdr">
       <Link href="/" className="hdr-brand">
-        <span className="hdr-mark" aria-hidden="true">
-          <Icon name="home" size={18} />
-        </span>
         <T s={s} role="brand" ctx={ctx} />
       </Link>
       <nav className="hdr-nav" aria-label="Main">
@@ -166,7 +172,7 @@ export function HeaderSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
         ))}
       </nav>
       {s.settings.showCta && (
-        <a href={String(s.settings.ctaHref || "#")} className="btn btn-primary hdr-cta">
+        <a href={String(s.settings.ctaHref || "#")} className="btn btn-secondary btn-sm hdr-cta">
           <T s={s} role="cta" ctx={ctx} />
         </a>
       )}
@@ -176,27 +182,64 @@ export function HeaderSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
 
 function HeroSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   const minH = Number(s.settings.minHeight) || 0;
+  const showIndex = !!s.settings.showIndex && Object.keys(ctx.cityCounts).length > 0;
   return (
-    <Shell s={s} ctx={ctx} style={minH ? { minHeight: `${minH}vh`, display: "flex", alignItems: "center" } : undefined} innerClass="hero">
-      <T s={s} role="eyebrow" ctx={ctx} className="hero-eyebrow" />
-      <T s={s} role="heading" ctx={ctx} className="hero-heading" />
-      <T s={s} role="subheading" ctx={ctx} className="hero-sub" />
-      {s.settings.showSearch && (
-        <div className="hero-search" onClick={ctx.editor ? (e) => e.stopPropagation() : undefined}>
-          <SearchBar placeholder={String(s.settings.placeholder || "")} inert={!!ctx.editor} />
-        </div>
-      )}
-      {s.settings.showChips && (
-        <div className="hero-chips">
-          <span className="hero-chips-label">Popular:</span>
-          {(s.items ?? []).map((it, i) => (
-            <Link key={i} className="chip chip-glass" href={`/search?${queryToParams(it.label).toString()}`}>
-              <I s={s} idx={i} field="label" ctx={ctx} />
-            </Link>
-          ))}
-        </div>
-      )}
+    <Shell
+      s={s}
+      ctx={ctx}
+      style={minH ? { minHeight: `${minH}vh`, display: "flex", alignItems: "center" } : undefined}
+      innerClass={cx("hero", showIndex && "hero-split")}
+    >
+      <div className="hero-main">
+        <T s={s} role="eyebrow" ctx={ctx} className="hero-eyebrow" />
+        <T s={s} role="heading" ctx={ctx} className="hero-heading" />
+        <T s={s} role="subheading" ctx={ctx} className="hero-sub sec-muted" />
+        {s.settings.showSearch && (
+          <div className="hero-search" onClick={ctx.editor ? (e) => e.stopPropagation() : undefined}>
+            <SearchBar placeholder={String(s.settings.placeholder || "")} inert={!!ctx.editor} />
+          </div>
+        )}
+        {s.settings.showChips && (s.items?.length ?? 0) > 0 && (
+          <p className="hero-tries">
+            <span className="sec-muted">Try</span>
+            {(s.items ?? []).map((it, i) => (
+              <Link key={i} href={`/search?${queryToParams(it.label).toString()}`}>
+                <I s={s} idx={i} field="label" ctx={ctx} />
+              </Link>
+            ))}
+          </p>
+        )}
+      </div>
+      {showIndex && <CityIndex ctx={ctx} />}
     </Shell>
+  );
+}
+
+/** Live listing counts per city — real numbers instead of marketing stats. */
+function CityIndex({ ctx }: { ctx: RenderCtx }) {
+  const rows = Object.entries(ctx.cityCounts)
+    .map(([slug, count]) => ({ slug, count, name: getCity(slug)?.name ?? slug, locs: ctx.localities?.[slug]?.length ?? 0 }))
+    .filter((r) => r.count > 0);
+  const total = rows.reduce((a, r) => a + r.count, 0);
+  return (
+    <aside className="city-index" aria-label="Listings by city">
+      <p className="city-index-title">Listings by city</p>
+      <ul>
+        {rows.map((r) => (
+          <li key={r.slug}>
+            <Link href={`/search?city=${r.slug}&f=1`}>
+              <span>{r.name}</span>
+              <span className="city-index-locs">{r.locs} localities</span>
+              <span className="num">{r.count}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <Link className="city-index-all" href="/search">
+        <span>All listings</span>
+        <span className="num">{total}</span>
+      </Link>
+    </aside>
   );
 }
 
@@ -227,7 +270,7 @@ function pickListings(ctx: RenderCtx, source: string, count: number) {
 function SectionHead({ s, ctx, link }: { s: Section; ctx: RenderCtx; link?: ReactNode }) {
   return (
     <div className="sec-head">
-      <div>
+      <div className="sec-head-text">
         <T s={s} role="heading" ctx={ctx} className="sec-title" />
         <T s={s} role="subheading" ctx={ctx} className="sec-sub sec-muted" />
       </div>
@@ -239,7 +282,7 @@ function SectionHead({ s, ctx, link }: { s: Section; ctx: RenderCtx; link?: Reac
 function FeaturedSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   const list = pickListings(ctx, String(s.settings.source || "featured"), Number(s.settings.count) || 6);
   const source = String(s.settings.source || "");
-  const href = source.startsWith("city:") ? `/search?city=${source.slice(5)}&f=1` : source === "newest" ? "/search?sort=newest" : "/search";
+  const href = source.startsWith("city:") ? `/search?city=${source.slice(5)}&f=1` : source === "newest" ? "/search?sort=newest&f=1" : "/search";
   return (
     <Shell s={s} ctx={ctx}>
       <SectionHead
@@ -247,7 +290,7 @@ function FeaturedSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
         ctx={ctx}
         link={
           s.settings.showLink ? (
-            <Link href={href} className="sec-link">
+            <Link href={href} className="text-link sec-link">
               <T s={s} role="link" ctx={ctx} />
             </Link>
           ) : null
@@ -266,15 +309,30 @@ function LocationsSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   return (
     <Shell s={s} ctx={ctx}>
       <SectionHead s={s} ctx={ctx} />
-      <div className="loc-grid">
+      <div className="loc-cols">
         {(s.items ?? []).map((it, i) => {
           const count = ctx.cityCounts[it.slug] ?? 0;
+          const locs = s.settings.showLocalities ? ctx.localities?.[it.slug] ?? [] : [];
           return (
-            <Link key={i} href={`/search?city=${it.slug}&f=1`} className="loc-tile" style={{ "--tile-h": `${(i * 47 + 150) % 360}` } as CSSProperties}>
-              <I s={s} idx={i} field="city" ctx={ctx} className="loc-city" />
-              <I s={s} idx={i} field="caption" ctx={ctx} className="loc-caption" />
-              {s.settings.showCounts && <span className="loc-count">{count} homes →</span>}
-            </Link>
+            <div key={i} className="loc-col">
+              <Link href={`/search?city=${it.slug}&f=1`} className="loc-col-head">
+                <I s={s} idx={i} field="city" ctx={ctx} className="loc-city" />
+                {s.settings.showCounts && <span className="num sec-muted">{count}</span>}
+              </Link>
+              <I s={s} idx={i} field="caption" ctx={ctx} className="loc-caption sec-muted" />
+              {locs.length > 0 && (
+                <ul className="loc-list">
+                  {locs.map((l) => (
+                    <li key={l.slug}>
+                      <Link href={`/search?city=${it.slug}&loc=${l.slug}&f=1`}>
+                        <span>{l.name}</span>
+                        {s.settings.showCounts && <span className="num">{l.count}</span>}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           );
         })}
       </div>
@@ -286,17 +344,16 @@ function FeaturesSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   return (
     <Shell s={s} ctx={ctx}>
       <SectionHead s={s} ctx={ctx} />
-      <div className={cx("feat-grid", s.settings.cards && "is-cards")} style={{ "--cols": String(s.settings.columns || 3) } as CSSProperties}>
+      <ol className={cx("feat-grid", s.settings.cards && "is-boxed")} style={{ "--cols": String(s.settings.columns || 3) } as CSSProperties}>
         {(s.items ?? []).map((it, i) => (
-          <div key={i} className="feat">
-            <span className="feat-icon">
-              <Icon name={it.icon || "spark"} size={22} />
-            </span>
+          <li key={i} className="feat">
+            {s.settings.numbered && <span className="feat-num num">{String(i + 1).padStart(2, "0")}</span>}
+            {s.settings.showIcons && <Icon name={it.icon || "spark"} size={22} className="feat-icon" />}
             <I s={s} idx={i} field="title" ctx={ctx} className="feat-title" />
             <I s={s} idx={i} field="body" ctx={ctx} className="feat-body sec-muted" />
-          </div>
+          </li>
         ))}
-      </div>
+      </ol>
     </Shell>
   );
 }
@@ -312,18 +369,13 @@ function TextSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
 
 function CtaSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   const boxed = !!s.settings.boxed;
-  const bg = sectionCss(s.style);
   return (
-    <Shell
-      s={s}
-      ctx={ctx}
-      innerClass={cx("cta", boxed && "cta-boxed")}
-      style={boxed ? { background: "transparent", color: "inherit" } : undefined}
-      innerStyle={boxed ? { background: bg.background, backgroundImage: bg.backgroundImage, backgroundSize: "cover", color: bg.color } : undefined}
-    >
-      <T s={s} role="heading" ctx={ctx} className="sec-title" />
-      <T s={s} role="body" ctx={ctx} className="cta-body" />
-      <a href={String(s.settings.href || "#")} className="btn btn-light">
+    <Shell s={s} ctx={ctx} innerClass={cx("cta", boxed && "cta-boxed")}>
+      <div className="cta-text">
+        <T s={s} role="heading" ctx={ctx} className="sec-title" />
+        <T s={s} role="body" ctx={ctx} className="cta-body sec-muted" />
+      </div>
+      <a href={String(s.settings.href || "#")} className={cx("btn", s.style.textColor ? "btn-inverse" : "btn-primary")}>
         <T s={s} role="button" ctx={ctx} />
       </a>
     </Shell>
@@ -333,7 +385,7 @@ function CtaSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
 function TestimonialsSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   return (
     <Shell s={s} ctx={ctx}>
-      <T s={s} role="heading" ctx={ctx} className="sec-title" />
+      <SectionHead s={s} ctx={ctx} />
       <div className="quote-grid">
         {(s.items ?? []).map((_, i) => (
           <figure key={i} className="quote">
@@ -363,7 +415,7 @@ export function FooterSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
           </Link>
         ))}
       </nav>
-      <T s={s} role="copyright" ctx={ctx} className="ftr-copy" />
+      <T s={s} role="copyright" ctx={ctx} className="ftr-copy sec-muted" />
     </Shell>
   );
 }
@@ -386,9 +438,15 @@ export function SectionView({ s, ctx }: { s: Section; ctx: RenderCtx }) {
   return R ? <R s={s} ctx={ctx} /> : null;
 }
 
+/** Loads exactly the Google Fonts the theme uses (React hoists this into <head>). */
+function ThemeFonts({ page }: { page: Page }) {
+  return <link rel="stylesheet" href={fontsHref([page.theme.fontDisplay, page.theme.fontBody])} precedence="default" />;
+}
+
 export function PageRenderer({ page, ctx }: { page: Page; ctx: RenderCtx }) {
   return (
     <div className="site" style={themeCss(page.theme)}>
+      <ThemeFonts page={page} />
       {page.sections
         .filter((s) => ctx.editor || !s.hidden)
         .map((s) => (
@@ -405,6 +463,7 @@ export function SiteShell({ page, children }: { page: Page; children: ReactNode 
   const ctx: RenderCtx = { properties: [], cityCounts: {} };
   return (
     <div className="site" style={themeCss(page.theme)}>
+      <ThemeFonts page={page} />
       {header && <HeaderSection s={header} ctx={ctx} />}
       <main>{children}</main>
       {footer && <FooterSection s={footer} ctx={ctx} />}

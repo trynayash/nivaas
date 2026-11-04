@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { EditorBridge, PageRenderer, RenderCtx } from "@/components/cms/PageRenderer";
-import { Page, SECTION_DEFS, Section, SectionType, Theme, createSection, uid } from "@/lib/cms/schema";
+import { Page, SECTION_DEFS, STUDIO_FONTS_HREF, Section, SectionType, Theme, createSection, uid } from "@/lib/cms/schema";
 import { cx } from "@/lib/format";
 import { InspectorApi, SectionInspector, TextInspector, ThemeInspector, readPath, writeStyle, writeText } from "./Inspector";
 
@@ -17,12 +17,11 @@ interface Props {
   publishedAt: string | null;
   history: { at: string; page: Page }[];
   ctx: Omit<RenderCtx, "editor">;
-  defaultPassword: boolean;
 }
 
 const fmtTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }) : "never");
 
-export function Editor({ initialDraft, initialPublished, publishedAt: initialPublishedAt, history: initialHistory, ctx, defaultPassword }: Props) {
+export function Editor({ initialDraft, initialPublished, publishedAt: initialPublishedAt, history: initialHistory, ctx }: Props) {
   const [page, setPage] = useState<Page>(initialDraft);
   const pageRef = useRef(page);
   const past = useRef<Page[]>([]);
@@ -291,12 +290,10 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
   return (
     <div className="studio">
       <header className="st-top">
+        <link rel="stylesheet" href={STUDIO_FONTS_HREF} precedence="default" />
         <div className="st-brand">
-          <span className="st-logo">N</span>
-          <div>
-            <b>Studio</b>
-            <span>{page.title}</span>
-          </div>
+          <b>Nivaas Studio</b>
+          <span>{page.title}</span>
         </div>
 
         <div className="st-device" role="radiogroup" aria-label="Preview size">
@@ -476,11 +473,11 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
         )}
         <footer className="st-left-foot">
           <Link href="/" target="_blank">
-            View live site ↗
+            Open live site ↗
           </Link>
           <button
             type="button"
-            className="link-btn"
+            className="text-link"
             onClick={async () => {
               await fetch("/api/admin/logout", { method: "POST" });
               window.location.href = "/admin/login";
@@ -499,11 +496,6 @@ export function Editor({ initialDraft, initialPublished, publishedAt: initialPub
           if ((e.target as HTMLElement).closest("a")) e.preventDefault();
         }}
       >
-        {defaultPassword && (
-          <p className="st-warning">
-            You’re using the default admin password. Set <code>ADMIN_PASSWORD</code> before going live.
-          </p>
-        )}
         <div className={cx("ed-frame", `is-${device}`)} style={width ? { width } : undefined}>
           <PageRenderer page={page} ctx={{ ...ctx, editor: bridge }} />
         </div>

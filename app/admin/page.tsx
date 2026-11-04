@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Editor } from "@/components/admin/Editor";
-import { isAdmin, usingDefaultPassword } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
 import { getCmsDoc } from "@/lib/cms/store";
 import { landingContext } from "@/lib/landing";
 
@@ -18,7 +18,6 @@ export default async function AdminPage() {
       publishedAt={doc.publishedAt}
       history={doc.history}
       ctx={landingContext()}
-      defaultPassword={usingDefaultPassword()}
     />
   );
 }

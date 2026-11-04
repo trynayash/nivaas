@@ -88,19 +88,28 @@ export interface Page {
   sections: Section[];
 }
 
-export const FONT_OPTIONS = [
-  { label: "Fraunces (serif)", value: "'Fraunces', Georgia, serif" },
-  { label: "Playfair Display (serif)", value: "'Playfair Display', Georgia, serif" },
-  { label: "DM Serif Display", value: "'DM Serif Display', Georgia, serif" },
-  { label: "Lora (serif)", value: "'Lora', Georgia, serif" },
-  { label: "Manrope (sans)", value: "'Manrope', system-ui, sans-serif" },
-  { label: "DM Sans (sans)", value: "'DM Sans', system-ui, sans-serif" },
-  { label: "Poppins (sans)", value: "'Poppins', system-ui, sans-serif" },
+export const FONT_OPTIONS: { label: string; value: string; google?: string }[] = [
+  { label: "Newsreader (serif)", value: "'Newsreader', Georgia, serif", google: "Newsreader:ital,opsz,wght@0,6..72,300..700;1,6..72,300..700" },
+  { label: "Source Serif 4", value: "'Source Serif 4', Georgia, serif", google: "Source+Serif+4:ital,opsz,wght@0,8..60,300..700;1,8..60,300..700" },
+  { label: "IBM Plex Serif", value: "'IBM Plex Serif', Georgia, serif", google: "IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400" },
+  { label: "Lora (serif)", value: "'Lora', Georgia, serif", google: "Lora:ital,wght@0,400..700;1,400..700" },
+  { label: "IBM Plex Sans", value: "'IBM Plex Sans', system-ui, sans-serif", google: "IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400" },
+  { label: "Public Sans", value: "'Public Sans', system-ui, sans-serif", google: "Public+Sans:ital,wght@0,300..800;1,300..800" },
+  { label: "Libre Franklin", value: "'Libre Franklin', system-ui, sans-serif", google: "Libre+Franklin:ital,wght@0,300..800;1,300..800" },
   { label: "System UI", value: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
 ];
 
-export const GOOGLE_FONTS_HREF =
-  "https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300..800&family=DM+Serif+Display&family=Fraunces:opsz,wght@9..144,300..800&family=Lora:wght@400..700&family=Manrope:wght@300..800&family=Playfair+Display:wght@400..800&family=Poppins:wght@300;400;500;600;700;800&display=swap";
+/** Google Fonts stylesheet for exactly the fonts a theme uses (plus IBM Plex Mono for figures/IDs). */
+export function fontsHref(fonts: string[]): string {
+  const families = new Set<string>(["IBM+Plex+Mono:wght@400;500"]);
+  for (const f of fonts) {
+    const opt = FONT_OPTIONS.find((o) => o.value === f);
+    if (opt?.google) families.add(opt.google);
+  }
+  return `https://fonts.googleapis.com/css2?${[...families].map((f) => `family=${f}`).join("&")}&display=swap`;
+}
+
+export const STUDIO_FONTS_HREF = fontsHref(["'IBM Plex Sans', system-ui, sans-serif"]);
 
 // ---------------------------------------------------------------------------
 // Section registry (drives the editor UI)
@@ -176,6 +185,7 @@ export const SECTION_DEFS: Record<SectionType, SectionDef> = {
       { key: "showSearch", label: "Show search bar", type: "toggle" },
       { key: "placeholder", label: "Search placeholder", type: "text" },
       { key: "showChips", label: "Show quick searches", type: "toggle" },
+      { key: "showIndex", label: "Show listings-by-city index", type: "toggle", hint: "Live counts from the property inventory." },
       { key: "minHeight", label: "Minimum height (vh)", type: "number", min: 0, max: 100 },
     ],
   },
@@ -220,8 +230,8 @@ export const SECTION_DEFS: Record<SectionType, SectionDef> = {
   },
   locations: {
     type: "locations",
-    label: "Browse by city",
-    description: "City tiles that link to search results.",
+    label: "Browse by locality",
+    description: "Cities with their localities and live listing counts, linking to search.",
     textRoles: [
       { key: "heading", label: "Heading" },
       { key: "subheading", label: "Sub-heading", multiline: true },
@@ -237,12 +247,15 @@ export const SECTION_DEFS: Record<SectionType, SectionDef> = {
         { label: "Mumbai", value: "mumbai" },
       ] },
     ],
-    settings: [{ key: "showCounts", label: "Show listing counts", type: "toggle" }],
+    settings: [
+      { key: "showCounts", label: "Show listing counts", type: "toggle" },
+      { key: "showLocalities", label: "List localities under each city", type: "toggle" },
+    ],
   },
   features: {
     type: "features",
-    label: "Feature grid",
-    description: "Icon + title + text cards.",
+    label: "Feature list",
+    description: "Short titled points in columns, optionally numbered.",
     textRoles: [
       { key: "heading", label: "Heading" },
       { key: "subheading", label: "Sub-heading", multiline: true },
@@ -264,7 +277,9 @@ export const SECTION_DEFS: Record<SectionType, SectionDef> = {
           { label: "4", value: "4" },
         ],
       },
-      { key: "cards", label: "Show as cards", type: "toggle" },
+      { key: "cards", label: "Show as boxes", type: "toggle" },
+      { key: "numbered", label: "Number the items (01, 02…)", type: "toggle" },
+      { key: "showIcons", label: "Show icons", type: "toggle" },
     ],
   },
   text: {
@@ -332,20 +347,22 @@ export const uid = () => Math.random().toString(36).slice(2, 9);
 export const baseStyle = (o: Partial<SectionStyle> = {}): SectionStyle => ({
   bgType: "none",
   bgColor: "#ffffff",
-  gradFrom: "#1f3a2e",
-  gradTo: "#335c48",
-  gradAngle: 135,
+  gradFrom: "#1d211e",
+  gradTo: "#3b413c",
+  gradAngle: 180,
   bgImage: "",
   overlay: 0.45,
   textColor: null,
   align: "left",
-  paddingY: 72,
-  width: "normal",
-  radius: 18,
+  paddingY: 64,
+  width: "wide",
+  radius: 4,
   ...o,
 });
 
 export const t = (text: string, style: Partial<TextStyle> & { tag: Tag }): TextBlock => ({ text, style: { ...style } });
+
+const H2 = { tag: "h2" as const, fontSize: 34, weight: 400, font: "display" as const, lineHeight: 1.15 };
 
 export function createSection(type: SectionType): Section {
   const id = `${type}-${uid()}`;
@@ -354,54 +371,64 @@ export function createSection(type: SectionType): Section {
       return {
         id,
         type,
-        style: baseStyle({ paddingY: 18, width: "wide", bgType: "color", bgColor: "#fbf8f3" }),
+        style: baseStyle({ paddingY: 16 }),
         text: {
-          brand: t("Nivaas", { tag: "span", fontSize: 24, weight: 700, font: "display" }),
-          cta: t("List your property", { tag: "span" }),
+          brand: t("Nivaas", { tag: "span", fontSize: 26, weight: 500, font: "display" }),
+          cta: t("List a property", { tag: "span" }),
         },
         items: [
-          { label: "Buy", href: "/search" },
           { label: "Bangalore", href: "/search?city=bangalore&f=1" },
-          { label: "Murud Janjira", href: "/search?city=murud-janjira&f=1" },
           { label: "Pune", href: "/search?city=pune&f=1" },
+          { label: "Mumbai", href: "/search?city=mumbai&f=1" },
+          { label: "Murud Janjira", href: "/search?city=murud-janjira&f=1" },
+          { label: "All listings", href: "/search" },
         ],
-        itemStyles: { label: { tag: "span", fontSize: 15, weight: 500 } },
+        itemStyles: { label: { tag: "span", fontSize: 15 } },
         settings: { sticky: true, showCta: true, ctaHref: "#contact" },
       };
     case "hero":
       return {
         id,
         type,
-        style: baseStyle({ bgType: "gradient", gradFrom: "#1f3a2e", gradTo: "#2f5a45", gradAngle: 160, textColor: "#fbf8f3", paddingY: 96, align: "left", width: "wide" }),
+        style: baseStyle({ paddingY: 64 }),
         text: {
-          eyebrow: t("Verified homes · RERA details on every listing", { tag: "p", fontSize: 13, weight: 600, transform: "uppercase", letterSpacing: 0.12, color: "#e9b79f" }),
-          heading: t("Find a home that fits the way you live", { tag: "h1", fontSize: 64, weight: 600, font: "display", lineHeight: 1.05 }),
-          subheading: t("Search the way you talk — “3 BHK in Whitefield under 2 Cr” or “villa in Murud Janjira”. We’ll show every match, and homes like the ones you love.", { tag: "p", fontSize: 19, lineHeight: 1.55 }),
+          eyebrow: t("", { tag: "p", fontSize: 14 }),
+          heading: t("Flats, villas and plots in Bangalore, Pune, Mumbai and Murud Janjira", {
+            tag: "h1",
+            fontSize: 54,
+            weight: 400,
+            font: "display",
+            lineHeight: 1.06,
+            letterSpacing: -0.012,
+          }),
+          subheading: t(
+            "Search by locality, BHK and budget — “3 BHK in Whitefield” or “villa in Madhli Aai under 1.5 Cr”. Every listing shows its RERA number, carpet area and possession date.",
+            { tag: "p", fontSize: 18, lineHeight: 1.55 }
+          ),
         },
         items: [
-          { label: "2 BHK in Bangalore" },
+          { label: "2 BHK in HSR Layout" },
           { label: "3 BHK in Madhli Aai, Murud Janjira" },
-          { label: "4 BHK in Koramangala" },
           { label: "Villas in Murud under 2 Cr" },
           { label: "Ready to move flats in Powai" },
+          { label: "Plots in Murud Janjira" },
         ],
-        itemStyles: { label: { tag: "span", fontSize: 14, weight: 500 } },
-        settings: { showSearch: true, placeholder: "Try “3 BHK in Bangalore under 1 Cr”", showChips: true, minHeight: 0 },
+        itemStyles: { label: { tag: "span", fontSize: 15 } },
+        settings: { showSearch: true, placeholder: "Locality, city, BHK or budget", showChips: true, showIndex: true, minHeight: 0 },
       };
     case "stats":
       return {
         id,
         type,
-        style: baseStyle({ bgType: "color", bgColor: "#f3ece1", paddingY: 40, align: "center", width: "wide" }),
+        style: baseStyle({ paddingY: 40 }),
         text: {},
         items: [
-          { value: "4 cities", label: "Bangalore, Murud Janjira, Pune & Mumbai" },
-          { value: "100%", label: "listings show RERA status" },
-          { value: "3 levels", label: "city → locality → area search" },
-          { value: "0", label: "brokerage on new projects" },
+          { value: "RERA", label: "status and number on every listing" },
+          { value: "3 areas", label: "carpet, built-up and super built-up" },
+          { value: "₹/sq.ft", label: "compared with the locality average" },
         ],
         itemStyles: {
-          value: { tag: "p", fontSize: 34, weight: 600, font: "display" },
+          value: { tag: "p", fontSize: 30, weight: 400, font: "display" },
           label: { tag: "p", fontSize: 14 },
         },
         settings: {},
@@ -410,54 +437,71 @@ export function createSection(type: SectionType): Section {
       return {
         id,
         type,
-        style: baseStyle({ paddingY: 80, width: "wide" }),
+        style: baseStyle(),
         text: {
-          heading: t("Handpicked this week", { tag: "h2", fontSize: 40, weight: 600, font: "display" }),
-          subheading: t("Homes our team has visited and verified, from city apartments to Konkan coast villas.", { tag: "p", fontSize: 17 }),
-          link: t("View all properties →", { tag: "span", weight: 600 }),
+          heading: t("Recently listed", { ...H2 }),
+          subheading: t("Newest first. Prices are the seller’s asking price; price per sq.ft is on super built-up area.", { tag: "p", fontSize: 16 }),
+          link: t("All listings →", { tag: "span", weight: 500 }),
         },
-        settings: { source: "featured", count: 6, showLink: true },
+        settings: { source: "newest", count: 6, showLink: true },
       };
     case "locations":
       return {
         id,
         type,
-        style: baseStyle({ bgType: "color", bgColor: "#f3ece1", paddingY: 80, width: "wide" }),
+        style: baseStyle(),
         text: {
-          heading: t("Browse by city", { tag: "h2", fontSize: 40, weight: 600, font: "display" }),
-          subheading: t("Start broad, then narrow down by locality and area.", { tag: "p", fontSize: 17 }),
+          heading: t("Browse by locality", { ...H2 }),
+          subheading: t("Counts update as listings are added.", { tag: "p", fontSize: 16 }),
         },
         items: [
-          { city: "Bangalore", caption: "Whitefield, HSR, Koramangala & more", slug: "bangalore" },
-          { city: "Murud Janjira", caption: "Sea-facing villas & weekend homes", slug: "murud-janjira" },
-          { city: "Pune", caption: "Kharadi, Baner, Hinjewadi", slug: "pune" },
-          { city: "Mumbai", caption: "Powai, Andheri, Bandra, Thane", slug: "mumbai" },
+          { city: "Bangalore", caption: "East and south Bangalore, Hebbal and Yelahanka", slug: "bangalore" },
+          { city: "Murud Janjira", caption: "Konkan coast: Madhli Aai, Rajpuri, Nandgaon, Kashid", slug: "murud-janjira" },
+          { city: "Pune", caption: "Kharadi and Viman Nagar, Baner and the Hinjewadi belt", slug: "pune" },
+          { city: "Mumbai", caption: "Powai, Andheri West, Bandra West and Thane", slug: "mumbai" },
         ],
         itemStyles: {
-          city: { tag: "h3", fontSize: 26, weight: 600, font: "display" },
+          city: { tag: "h3", fontSize: 24, weight: 400, font: "display" },
           caption: { tag: "p", fontSize: 14 },
         },
-        settings: { showCounts: true },
+        settings: { showCounts: true, showLocalities: true },
       };
     case "features":
       return {
         id,
         type,
-        style: baseStyle({ paddingY: 88, width: "wide" }),
+        style: baseStyle(),
         text: {
-          heading: t("Built for how people actually look for homes", { tag: "h2", fontSize: 40, weight: 600, font: "display" }),
-          subheading: t("Every listing carries the details that matter, and every home leads you to others like it.", { tag: "p", fontSize: 17 }),
+          heading: t("What every listing shows", { ...H2 }),
+          subheading: t("So you can compare homes before calling anyone.", { tag: "p", fontSize: 16 }),
         },
         items: [
-          { icon: "search", title: "Search that understands you", body: "Type a city, locality, configuration or budget in plain words — even “Bangalore mein 2BHK”. Filters do the rest." },
-          { icon: "shield", title: "Every detail, upfront", body: "RERA status and number, carpet & super built-up area, floor, facing, amenities, possession — on every property page." },
-          { icon: "spark", title: "Homes like the one you love", body: "Open any property to see similar homes in the same area, configuration and price range." },
+          {
+            icon: "shield",
+            title: "RERA status",
+            body: "The registration number and authority — or why registration doesn’t apply, such as a resale flat completed before 2017 or an individual plot.",
+          },
+          {
+            icon: "chart",
+            title: "Three area figures",
+            body: "Carpet, built-up and super built-up area listed separately, with price per sq.ft against the locality average.",
+          },
+          {
+            icon: "key",
+            title: "Possession and floor",
+            body: "Ready to move or the promised possession month, the floor and number of floors, facing and parking.",
+          },
+          {
+            icon: "spark",
+            title: "Similar homes, with reasons",
+            body: "Each property page lists comparable homes nearby and says why: same area, same BHK, price within 10%.",
+          },
         ],
         itemStyles: {
-          title: { tag: "h3", fontSize: 21, weight: 600 },
+          title: { tag: "h3", fontSize: 18, weight: 600 },
           body: { tag: "p", fontSize: 15, lineHeight: 1.6 },
         },
-        settings: { columns: "3", cards: true },
+        settings: { columns: "4", cards: false, numbered: true, showIcons: false },
       };
     case "text":
       return {
@@ -465,8 +509,12 @@ export function createSection(type: SectionType): Section {
         type,
         style: baseStyle({ width: "narrow" }),
         text: {
-          heading: t("About us", { tag: "h2", fontSize: 36, weight: 600, font: "display" }),
-          body: t("Write anything here. Use the panel on the right to change the heading level, size, weight and decoration.", { tag: "p", fontSize: 17, lineHeight: 1.7 }),
+          heading: t("About us", { ...H2 }),
+          body: t("Write anything here. Use the panel on the right to change the heading level, size, weight and decoration.", {
+            tag: "p",
+            fontSize: 17,
+            lineHeight: 1.7,
+          }),
         },
         settings: {},
       };
@@ -474,28 +522,32 @@ export function createSection(type: SectionType): Section {
       return {
         id,
         type,
-        style: baseStyle({ bgType: "color", bgColor: "#c8553d", textColor: "#fff8f2", align: "center", paddingY: 72, width: "normal" }),
+        style: baseStyle(),
         text: {
-          heading: t("Selling or renting out a home?", { tag: "h2", fontSize: 38, weight: 600, font: "display" }),
-          body: t("List it with us and reach buyers searching your exact locality.", { tag: "p", fontSize: 18 }),
-          button: t("Talk to our team", { tag: "span", weight: 600 }),
+          heading: t("Selling a flat in Whitefield or a bungalow in Murud?", { ...H2, fontSize: 30 }),
+          body: t("We list resale and new-launch homes with the same details buyers see here: RERA status, all three area figures and the possession date.", {
+            tag: "p",
+            fontSize: 16,
+            lineHeight: 1.6,
+          }),
+          button: t("Talk to the listings team", { tag: "span", weight: 500 }),
         },
-        settings: { href: "#contact", boxed: false },
+        settings: { href: "#contact", boxed: true },
       };
     case "testimonials":
       return {
         id,
         type,
-        style: baseStyle({ paddingY: 80, width: "wide" }),
-        text: { heading: t("What buyers say", { tag: "h2", fontSize: 36, weight: 600, font: "display" }) },
+        style: baseStyle(),
+        text: { heading: t("What buyers say", { ...H2 }) },
         items: [
           { quote: "Replace this with a quote from a real customer.", name: "Customer name", role: "Bought a 3 BHK in …" },
           { quote: "Replace this with a quote from a real customer.", name: "Customer name", role: "Bought a villa in …" },
         ],
         itemStyles: {
-          quote: { tag: "p", fontSize: 19, italic: true, lineHeight: 1.5, font: "display" },
-          name: { tag: "p", fontSize: 15, weight: 700 },
-          role: { tag: "p", fontSize: 13 },
+          quote: { tag: "p", fontSize: 20, lineHeight: 1.45, font: "display" },
+          name: { tag: "p", fontSize: 15, weight: 600 },
+          role: { tag: "p", fontSize: 14 },
         },
         settings: {},
       };
@@ -503,17 +555,21 @@ export function createSection(type: SectionType): Section {
       return {
         id,
         type,
-        style: baseStyle({ bgType: "color", bgColor: "#16261f", textColor: "#d9d4ca", paddingY: 56, width: "wide" }),
+        style: baseStyle({ bgType: "color", bgColor: "#1d211e", textColor: "#e8e5de", paddingY: 48 }),
         text: {
-          brand: t("Nivaas", { tag: "p", fontSize: 26, weight: 700, font: "display", color: "#fbf8f3" }),
-          tagline: t("Homes across Bangalore, Murud Janjira, Pune and Mumbai.", { tag: "p", fontSize: 15 }),
-          copyright: t("© 2026 Nivaas Realty. Listing details are provided by sellers; verify RERA information on the official portal.", { tag: "p", fontSize: 13, color: "#8f9a92" }),
+          brand: t("Nivaas", { tag: "p", fontSize: 24, weight: 500, font: "display" }),
+          tagline: t("Residential listings in Bangalore, Pune, Mumbai and Murud Janjira.", { tag: "p", fontSize: 15 }),
+          copyright: t(
+            "© 2026 Nivaas Realty. Listing details come from sellers. Check RERA registration on your state authority’s website before paying a booking amount.",
+            { tag: "p", fontSize: 13 }
+          ),
         },
         items: [
-          { label: "Search properties", href: "/search" },
+          { label: "All listings", href: "/search" },
           { label: "Bangalore", href: "/search?city=bangalore&f=1" },
+          { label: "Pune", href: "/search?city=pune&f=1" },
+          { label: "Mumbai", href: "/search?city=mumbai&f=1" },
           { label: "Murud Janjira", href: "/search?city=murud-janjira&f=1" },
-          { label: "Admin", href: "/admin" },
         ],
         itemStyles: { label: { tag: "span", fontSize: 14 } },
         settings: {},
@@ -522,15 +578,15 @@ export function createSection(type: SectionType): Section {
 }
 
 export const DEFAULT_THEME: Theme = {
-  primary: "#1f3a2e",
-  accent: "#c8553d",
-  background: "#fbf8f3",
-  surface: "#ffffff",
-  ink: "#1c2420",
-  muted: "#5d6b63",
-  fontDisplay: "'Fraunces', Georgia, serif",
-  fontBody: "'Manrope', system-ui, sans-serif",
-  radius: 14,
+  primary: "#1d211e",
+  accent: "#9b3d23",
+  background: "#f5f3ee",
+  surface: "#fcfbf8",
+  ink: "#1d211e",
+  muted: "#66635b",
+  fontDisplay: "'Newsreader', Georgia, serif",
+  fontBody: "'IBM Plex Sans', system-ui, sans-serif",
+  radius: 4,
 };
 
 export function defaultPage(): Page {
@@ -538,7 +594,7 @@ export function defaultPage(): Page {
     version: 1,
     title: "Landing page",
     theme: { ...DEFAULT_THEME },
-    sections: (["header", "hero", "stats", "featured", "features", "locations", "cta", "footer"] as SectionType[]).map((type) => ({
+    sections: (["header", "hero", "featured", "features", "locations", "cta", "footer"] as SectionType[]).map((type) => ({
       ...createSection(type),
       id: type, // stable ids for the defaults
     })),

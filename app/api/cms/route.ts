@@ -12,6 +12,5 @@ export async function PUT(req: Request) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json().catch(() => null);
   if (!isValidPage(body?.page)) return NextResponse.json({ error: "Invalid page" }, { status: 400 });
-  const doc = await saveDraft(body.page);
-  return NextResponse.json({ draftSavedAt: doc.draftSavedAt });
+  return NextResponse.json(await saveDraft(body.page));
 }
