@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { propertyContactMessage, whatsappFromEnv } from "@/lib/contact";
+import { DEFAULT_CONTACT_MESSAGE, propertyContactMessage, waLink, whatsappFromEnv } from "@/lib/contact";
+import { EnquiryForm } from "@/components/EnquiryForm";
 import { SiteShell } from "@/components/cms/PageRenderer";
 import { EmiCalculator } from "@/components/EmiCalculator";
 import { FloorPlan } from "@/components/FloorPlan";
+import { Gallery } from "@/components/Gallery";
 import { PropertyArt } from "@/components/PropertyArt";
 import { PropertyCard, SampleTag } from "@/components/PropertyCard";
 import { getPublishedPage } from "@/lib/cms/store";
@@ -90,12 +92,16 @@ export default async function PropertyPage({ params, searchParams }: Props) {
   const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
   const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
   const pageUrl = `${proto}://${host}/property/${p.slug}`;
-  const contact = { whatsapp: whatsappFromEnv(), message: propertyContactMessage(`${p.title}, ${loc.cityName}`, formatPrice(p.price), pageUrl) };
+  const wa = whatsappFromEnv();
+  // Header "List a property" keeps the selling message; the enquiry box gets the property-specific one.
+  const contact = { whatsapp: wa, message: DEFAULT_CONTACT_MESSAGE };
+  const propertyWhatsApp = wa ? waLink(wa, propertyContactMessage(`${p.title}, ${loc.cityName}`, formatPrice(p.price), pageUrl)) : undefined;
   const crumb = (q: string) => `/search?f=1&${q}`;
 
   return (
     <SiteShell page={site} contact={contact}>
       <div className="container detail">
+        {!p.published && <p className="notice">Draft preview — this listing isn’t visible to visitors yet.</p>}
         <nav className="crumbs" aria-label="Breadcrumb">
           {fromSearch && (
             <Link href={`/search?${ctxQuery}`} className="text-link">
@@ -134,10 +140,14 @@ export default async function PropertyPage({ params, searchParams }: Props) {
         </header>
 
         <div className={isPlot ? "detail-gallery is-single" : "detail-gallery"}>
-          <figure className="gal-main">
-            <PropertyArt id={p.id} type={p.type} hue={p.hue} images={p.images} label={p.title} plotArea={p.plotArea} className="gal-art" />
-            {!p.images.length && <figcaption>{isPlot ? "Plot sketch from listed area — not a survey" : "Drawing only — no photos yet"}</figcaption>}
-          </figure>
+          {p.images.length ? (
+            <Gallery images={p.images} title={p.title} />
+          ) : (
+            <figure className="gal-main">
+              <PropertyArt id={p.id} type={p.type} hue={p.hue} images={p.images} label={p.title} plotArea={p.plotArea} className="gal-art" />
+              <figcaption>{isPlot ? "Plot sketch from listed area — not a survey" : "Drawing only — no photos yet"}</figcaption>
+            </figure>
+          )}
           {!isPlot && (
             <figure className="gal-plan">
               <FloorPlan bhk={p.bhk} bathrooms={p.bathrooms} balconies={p.balconies} carpetArea={p.carpetArea} />
@@ -277,9 +287,16 @@ export default async function PropertyPage({ params, searchParams }: Props) {
                 </p>
               )}
               <EmiCalculator price={p.price} />
-              <a className="btn btn-secondary btn-block" href="#similar">
+              <a className="text-link" href="#similar">
                 Similar homes ↓
               </a>
+            </div>
+            <div className="price-box enq-box">
+              {p.published ? (
+                <EnquiryForm propertyId={p.id} title={p.title} whatsappHref={propertyWhatsApp} />
+              ) : (
+                <p className="st-hint">The enquiry form appears here once the listing is published.</p>
+              )}
             </div>
           </aside>
         </div>

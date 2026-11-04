@@ -109,7 +109,7 @@ export function fontsHref(fonts: string[]): string {
   return `https://fonts.googleapis.com/css2?${[...families].map((f) => `family=${f}`).join("&")}&display=swap`;
 }
 
-export const STUDIO_FONTS_HREF = fontsHref(["'IBM Plex Sans', system-ui, sans-serif"]);
+export const STUDIO_FONTS_HREF = fontsHref(["'IBM Plex Sans', system-ui, sans-serif", "'Newsreader', Georgia, serif"]);
 
 // ---------------------------------------------------------------------------
 // Section registry (drives the editor UI)
