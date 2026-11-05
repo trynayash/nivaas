@@ -164,11 +164,12 @@ export function PhotoUploader({
           }}
         >
           <p>
-            Drag photos here, or{" "}
-            <button type="button" className="text-link" onClick={() => inputRef.current?.click()}>
-              choose files
+            <button type="button" className="st-btn" onClick={() => inputRef.current?.click()}>
+              Choose photos
             </button>
-            . JPG, PNG or WebP — large photos are resized automatically. The first photo is the cover.
+          </p>
+          <p className="st-hint">
+            Or drag them here. JPG, PNG or WebP — large photos are resized automatically. The first photo is the cover.
           </p>
           <input
             ref={inputRef}

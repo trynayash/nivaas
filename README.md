@@ -102,9 +102,17 @@ npm run typecheck        # TypeScript
 npm run lint             # ESLint (Next.js + React Hooks rules)
 npm test                 # 68 unit + storage tests (add TEST_DATABASE_URL=postgres://… to include Postgres)
 E2E_PASSWORD=… npm run e2e   # 35 browser checks against a running server (E2E_BASE_URL, default localhost:3000)
+E2E_PASSWORD=… npm run audit:responsive   # every page at 14 screen sizes (320px phones to 2560px monitors): sideways scroll, off-screen content, tiny text and tap targets
 ```
 
 `npm run e2e` creates and deletes its own listing and enquiry. `E2E_DESTRUCTIVE=1` also removes all sample listings — only use that against a throwaway database.
+
+## Screens and devices
+
+- **Phones, tablets, laptops, large monitors:** the public site is built with container queries and was checked from 320px to 2560px, portrait and landscape. On phones the header links move into a **Menu** button, the filters open from a **Filters** button, and the floor plan switches to a tall layout so labels stay readable.
+- **Touch:** on touch screens every button and link is at least 44px, and form fields are 16px so iPhones don’t zoom in when you tap them.
+- **Studio:** listings, enquiries and the listing form work on phones (tables become cards, the save bar stacks). The landing-page editor shows one panel at a time on phones (**Sections / Page / Style** tabs at the bottom) and the page beside one side panel on tablets.
+- **Print:** property pages print as a clean sheet (no navigation, forms or calculators).
 
 ## Design rules
 

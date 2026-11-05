@@ -229,6 +229,23 @@ export function HeaderSection({ s, ctx }: { s: Section; ctx: RenderCtx }) {
           </CmsLink>
         ))}
       </nav>
+      {/* Phones: the inline nav is hidden, so the same links live in a disclosure menu. */}
+      {!ctx.editor && (s.items ?? []).some((it) => it.label) && (
+        <details className="hdr-menu">
+          <summary>
+            <span>Menu</span>
+          </summary>
+          <nav aria-label="Menu">
+            {(s.items ?? [])
+              .filter((it) => it.label)
+              .map((it, i) => (
+                <CmsLink key={i} href={it.href} ctx={ctx}>
+                  {it.label}
+                </CmsLink>
+              ))}
+          </nav>
+        </details>
+      )}
       {s.settings.showCta && (
         <CmsLink href={String(s.settings.ctaHref || "#")} ctx={ctx} className="btn btn-secondary btn-sm hdr-cta">
           <T s={s} role="cta" ctx={ctx} />

@@ -68,6 +68,9 @@ export function Editor({ initialDraft, initialPublished, draftRev, publishedAt: 
 
   const [sel, setSel] = useState<{ section?: string; path?: string }>({});
   const [leftTab, setLeftTab] = useState<"sections" | "theme">("sections");
+  // Narrow screens show one panel at a time (tablets keep the page beside the side panel).
+  const [panel, setPanel] = useState<"sections" | "page" | "style">("page");
+  const onPhone = () => typeof window !== "undefined" && window.matchMedia("(max-width: 639px)").matches;
   const [device, setDevice] = useState<Device>("desktop");
   const [library, setLibrary] = useState(false);
   const [versions, setVersions] = useState(false);
@@ -320,6 +323,7 @@ export function Editor({ initialDraft, initialPublished, draftRev, publishedAt: 
     });
     setLibrary(false);
     select(s.id);
+    if (onPhone()) setPanel("page");
     scrollToSection(s.id);
   };
 
@@ -430,7 +434,7 @@ export function Editor({ initialDraft, initialPublished, draftRev, publishedAt: 
   const width = DEVICE_WIDTH[device];
 
   return (
-    <div className="studio">
+    <div className="studio" data-panel={panel}>
       <header className="st-top">
         <link rel="stylesheet" href={STUDIO_FONTS_HREF} precedence="default" />
         <div className="st-brand">
@@ -608,6 +612,7 @@ export function Editor({ initialDraft, initialPublished, draftRev, publishedAt: 
                       className="st-row-main"
                       onClick={() => {
                         select(s.id);
+                        if (onPhone()) setPanel("page");
                         scrollToSection(s.id);
                       }}
                     >
@@ -702,6 +707,25 @@ export function Editor({ initialDraft, initialPublished, draftRev, publishedAt: 
           </div>
         )}
       </aside>
+
+      <nav className="st-panelbar" aria-label="Editor panels">
+        <button type="button" aria-pressed={panel === "sections"} onClick={() => setPanel("sections")}>
+          Sections
+        </button>
+        <button type="button" aria-pressed={panel === "page"} onClick={() => setPanel("page")}>
+          Page
+        </button>
+        <button type="button" aria-pressed={panel === "style"} onClick={() => setPanel("style")}>
+          Style
+          {selectedSection && (
+            <>
+              {" "}
+              <span aria-hidden="true">●</span>
+              <span className="sr-only">, item selected</span>
+            </>
+          )}
+        </button>
+      </nav>
 
       {toast && (
         <div

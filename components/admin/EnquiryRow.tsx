@@ -49,7 +49,7 @@ export function EnquiryRow({ e }: { e: Enquiry }) {
         <p className="enq-msg">{e.message}</p>
         <input
           className="st-input enq-note"
-          placeholder="Private note (saved when you leave the field)"
+          placeholder="Private note (saves automatically)"
           value={note}
           maxLength={2000}
           onChange={(ev) => setNote(ev.target.value)}

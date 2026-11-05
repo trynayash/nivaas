@@ -11,7 +11,8 @@
     "db:migrate": "tsx scripts/db-migrate.ts",
     "lint": "eslint .",
     "test": "vitest run",
-    "e2e": "node scripts/e2e.cjs"
+    "e2e": "node scripts/e2e.cjs",
+    "audit:responsive": "node scripts/responsive-audit.cjs"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.2",
